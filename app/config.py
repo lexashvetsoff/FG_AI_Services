@@ -1,0 +1,35 @@
+import json
+from pydantic_settings import BaseSettings
+from pydantic import field_validator
+
+
+class Settings(BaseSettings):
+    APP_NAME: str = "Pharma Matcher API"
+    APP_VERSION: str = "0.1.0"
+    EMBED_MODEL: str = "sergeyzh/LaBSE-ru-sts"
+    LLM_MODEL: str = "qwen2.5:14b"
+    OLLAMA_HOST: str = "http://127.0.0.1:11434"
+    OLLAMA_TIMEOUT: int = 30
+    THRESHOLD_HIGH: float = 0.82
+    THRESHOLD_LOW: float = 0.60
+    CACHE_TTL: int = 7200
+    LOG_LEVEL: str = "INFO"
+    JWT_SECRET: str
+    JWT_ALGORITHM: str
+    JWT_EXPIRE_MINUTES: int
+    VALID_CLIENTS: dict = {}
+
+    @field_validator("VALID_CLIENTS", mode="before")
+    @classmethod
+    def _parse_clients(cls, v):
+        if isinstance(v, str):
+            try: return json.loads(v)
+            except json.JSONDecodeError: return {}
+        return v
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+
+settings = Settings()
