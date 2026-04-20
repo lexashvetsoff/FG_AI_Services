@@ -5,7 +5,7 @@ from app.config import settings
 from app.services.cache import TTLCache
 from app.models.llm import LLMVerifier
 from app.models.embeddings import EmbeddingModel
-from app.schemas import MatchRequest, MatchResponse
+from app.schemas.schemas import MatchRequest, MatchResponse
 from app.utils.pharma_parser import extract_all_attrs
 from app.services.attribute_matcher import AttributeMatcher
 

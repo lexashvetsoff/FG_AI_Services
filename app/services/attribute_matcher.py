@@ -1,5 +1,5 @@
 from typing import Optional, Dict
-from app.schemas import PharmaSpecs
+from app.schemas.schemas import PharmaSpecs
 # from app.utils.pharma_parser import extract_strength, extract_pack_size, normalize_dosage_form
 from app.utils.pharma_parser import extract_all_attrs
 

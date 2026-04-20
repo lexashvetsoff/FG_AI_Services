@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from app.config import settings
-from app.schemas import TokenRequest, TokenResponse
+from app.schemas.schemas import TokenRequest, TokenResponse
 from app.auth.jwt_handler import create_access_token
 
 

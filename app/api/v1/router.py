@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.schemas import MatchRequest, MatchResponse
+from app.schemas.schemas import MatchRequest, MatchResponse
 from app.services.matcher import MatcherService
 from app.auth.dependencies import get_current_client
 
