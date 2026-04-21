@@ -6,6 +6,11 @@ from pydantic import field_validator
 class Settings(BaseSettings):
     APP_NAME: str = "Pharma Matcher API"
     APP_VERSION: str = "0.1.0"
+    DB_HOST: str
+    DB_PORT: int
+    DB_USER: str
+    DB_PASS: str
+    DB_NAME: str
     EMBED_MODEL: str = "sergeyzh/LaBSE-ru-sts"
     LLM_MODEL: str = "qwen2.5:14b"
     OLLAMA_HOST: str = "http://127.0.0.1:11434"
@@ -18,6 +23,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str
     JWT_EXPIRE_MINUTES: int
     VALID_CLIENTS: dict = {}
+    INITIAL_ADMIN_EMAIL: str | None = None
+    INITIAL_ADMIN_PASSWORD: str | None = None
 
     @field_validator("VALID_CLIENTS", mode="before")
     @classmethod

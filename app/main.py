@@ -2,6 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.config import settings
+from app.db.session import AsyncSessionLocal
+from app.core.bootstrap import create_initial_admin
 from app.ai.matcher.embeddings import EmbeddingModel
 from app.ai.matcher.llm import LLMVerifier
 from app.services.cache import TTLCache
@@ -23,6 +25,10 @@ async def lifespan(app: FastAPI):
     setup_logging()
     logging.info(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logging.info("⏳ Initializing models...")
+
+    async with AsyncSessionLocal() as session:
+        await create_initial_admin(session)
+    
     embedder = EmbeddingModel(settings.EMBED_MODEL)
     llm = LLMVerifier()
     cache = TTLCache(settings.CACHE_TTL)
@@ -42,6 +48,11 @@ def create_app() -> FastAPI:
         version=settings.APP_VERSION,
         lifespan=lifespan
     )
+
+    @app.get('/health', tags=['System'])
+    def health_check():
+        return {'status': 'ok'}
+    
     app.include_router(api_router)
     app.include_router(auth_router)
     return app
