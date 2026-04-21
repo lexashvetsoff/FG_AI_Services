@@ -2,11 +2,11 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.config import settings
-from app.models.embeddings import EmbeddingModel
-from app.models.llm import LLMVerifier
+from app.ai.matcher.embeddings import EmbeddingModel
+from app.ai.matcher.llm import LLMVerifier
 from app.services.cache import TTLCache
 from app.services.matcher import MatcherService
-from app.api.v1.router import router as api_router
+from app.api.v1.matcher import router as api_router
 from app.auth.router import router as auth_router
 
 

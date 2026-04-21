@@ -23,7 +23,7 @@ async def match_names(
         raise HTTPException(status_code=500, detail=f'Matching failed: {str(e)}')
 
 
-@router.get('/health')
+@router.get('/health_matching')
 async def health():
     from app.config import settings
     return {'status': 'ok', 'embed_model': settings.EMBED_MODEL, 'llm_model': settings.LLM_MODEL}
