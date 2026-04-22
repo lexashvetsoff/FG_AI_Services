@@ -1,7 +1,7 @@
 from typing import Optional, Dict
 from app.schemas.schemas import PharmaSpecs
 # from app.utils.pharma_parser import extract_strength, extract_pack_size, normalize_dosage_form
-from app.utils.pharma_parser import extract_all_attrs
+from app.utils.pharma_parser import extract_all_attrs, strength_match
 
 
 class AttributeMatcher:
@@ -25,10 +25,19 @@ class AttributeMatcher:
             gt_val = ground_truth.get(key)
             if gt_val:  # Сравниваем только если атрибут найден в ground_truth
                 comp_val = comp_attrs.get(key)
-                if comp_val and self._norm(gt_val) != self._norm(comp_val):
-                    multipler *= (1.0 - penalty)
-                elif not comp_val:
-                    multipler *= 0.95   # Атрибут не найден в конкуренте → лёгкий штраф
+
+                if key == 'strength':
+                    # Используем умное сравнение для дозировок
+                    if comp_val and not strength_match(gt_val, comp_val):
+                        multipler *= (1.0 - penalty)
+                    elif not comp_val:
+                        multipler *= 0.95
+                else:
+                    # Для формы и фасовки - простое сравнение
+                    if comp_val and self._norm(gt_val) != self._norm(comp_val):
+                        multipler *= (1.0 - penalty)
+                    elif not comp_val:
+                        multipler *= 0.95   # Атрибут не найден в конкуренте → лёгкий штраф
         return max(multipler, 0.1)
 
     # def score(self, comp_name: str, specs: Optional[PharmaSpecs]) -> float:

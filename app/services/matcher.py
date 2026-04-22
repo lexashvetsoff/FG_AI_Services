@@ -6,7 +6,7 @@ from app.services.cache import TTLCache
 from app.ai.matcher.llm import LLMVerifier
 from app.ai.matcher.embeddings import EmbeddingModel
 from app.schemas.schemas import MatchRequest, MatchResponse
-from app.utils.pharma_parser import extract_all_attrs
+from app.utils.pharma_parser import extract_all_attrs, strength_match
 from app.services.attribute_matcher import AttributeMatcher
 
 
@@ -84,13 +84,32 @@ class MatcherService:
         scores_map = {c: s for c, s in zip(req.competitor_names, corrected_scores)}
         result_data = {}
 
-        # 4. Роутинг с проверкой дозировки
+        # 4. Роутинг с проверкой атрибутов
         strength_mismatch = False
+        pack_size_mismatch = False
+        # if gt_attrs.get('strength'):
+        #     comp_strength = extract_all_attrs(final_best).get('strength')
+        #     if comp_strength:
+        #         if self.attr_matcher._norm(gt_attrs['strength']) != self.attr_matcher._norm(comp_strength):
+        #             strength_mismatch = True
+
+        # Проверка дозировки
         if gt_attrs.get('strength'):
             comp_strength = extract_all_attrs(final_best).get('strength')
-            if comp_strength:
-                if self.attr_matcher._norm(gt_attrs['strength']) != self.attr_matcher._norm(comp_strength):
-                    strength_mismatch = True
+            if comp_strength and not strength_match(gt_attrs['strength'], comp_strength):
+                strength_mismatch = True
+        
+        # Проверка фасовки (Pack Size)
+        if gt_attrs.get('pack_size'):
+            comp_pack = extract_all_attrs(final_best).get('pack_size')
+            if comp_pack:
+                # Сравниваем числовые части: №60 vs 60 шт -> должно совпадать
+                # Нормализуем для сравнения: убираем № и пробелы
+                gt_pack_clean = gt_attrs['pack_size'].replace('№', '').replace(' ', '').upper()
+                comp_pack_clean = comp_pack.replace('№', '').replace(' ', '').upper()
+
+                if gt_pack_clean != comp_pack_clean:
+                    pack_size_mismatch = True
 
         # # 3. Роутинг с учётом атрибутов
         # # Если дозировка не совпала -> принудительно в LLM или no_match
@@ -98,8 +117,28 @@ class MatcherService:
         # if specs.get('strength'):
         #     if extract_strength(final_best) and extract_strength(final_best).replace(" ", "") != specs["strength"].replace(" ", ""):
         #         strength_mismatch = True
-        
-        if strength_mismatch or final_score < settings.THRESHOLD_HIGH:
+
+        # --- ПРИНЯТИЕ РЕШЕНИЯ ---
+    
+        # Если дозировка ИЛИ фасовка не совпадают -> Принудительный NO_MATCH
+        if strength_mismatch or pack_size_mismatch:
+            logger.warning(
+                f"MISMATCH DETECTED | Str:{strength_mismatch} | Pack:{pack_size_mismatch} | "
+                f"Best: {final_best} | req_id={req.request_id}"
+            )
+            result_data = {
+                'internal_id': req.internal_id,
+                'request_id': req.request_id,
+                'internal_name': req.internal_name,
+                'best_match': None,
+                'confidence': round(final_score, 3),
+                'reasoning': f"Критическое расхождение: {'дозировка' if strength_mismatch else 'фасовка'}. "
+                             f"Требуется точное совпадение.",
+                'source': 'no_match',
+                'all_scores': scores_map
+            }
+        # Если атрибуты ок, но скор низкий -> LLM
+        elif final_score < settings.THRESHOLD_HIGH:
             if final_score >= settings.THRESHOLD_LOW:
                 # llm_res = await self.llm.verify(req.internal_name, req.competitor_names, final_best, final_score, specs)
                 llm_res = await self.llm.verify(req.internal_name, req.competitor_names, final_best, final_score, gt_attrs)
