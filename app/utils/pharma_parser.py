@@ -49,7 +49,7 @@ def normalize_strength(strength: str) -> List[str]:
     for comp in components:
         comp = comp.strip().lower()
         # Извлекаем число и единицу
-        match = re.match(r'(\d+(?:\.\d+)?)\s*(мг|мл|г|%)', comp, re.IGNORECASE)
+        match = re.match(r'(\d+(?:\.\d+)?)\s*(мг|мл|г|мкг|%)', comp, re.IGNORECASE)
         if match:
             val = float(match.group(1))
             unit = match.group(2).lower()
