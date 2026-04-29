@@ -1,0 +1,10 @@
+{% extends "user/base.html" %}
+
+{% block content %}
+    <h2>Загрузить Excel файл</h2>
+
+    <form action="/user/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".xlsx" required>
+        <button type="submit">Загрузить</button>
+    </form>
+{% endblock %}

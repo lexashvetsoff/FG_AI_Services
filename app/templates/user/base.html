@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Panel</title>
+    <link rel="stylesheet" href="/static/user/user.css">
+</head>
+<body>
+
+    <header>
+        <h1>FG AI SERVICE</h1>
+        <div class="user">
+            {{ user.email }}
+        </div>
+    </header>
+
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="/user">Главная панель</a></li>
+                <li><a href="/user/upload">Загрузить файл</a></li>
+                {% if user.role == "ADMIN" %}
+                <li><a href="/admin">Панель администратора</a></li>
+                {% endif %}
+                <li><a href="/logout">Выход</a></li>
+            </ul>
+        </nav>
+        
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+
+    </div>
+
+</body>
+</html>

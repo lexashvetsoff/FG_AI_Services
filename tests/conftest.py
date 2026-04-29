@@ -16,7 +16,7 @@ from app.services.cache import TTLCache
 
 
 # --- Конфигурация для тестов ---
-# OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+# PARSER_OLLAMA_HOST = os.getenv("PARSER_OLLAMA_HOST", "http://127.0.0.1:11434")
 # OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:27b") # Укажите вашу модель
 TEST_TIMEOUT = 180  # Секунд на один тест с реальным LLM
 
@@ -35,18 +35,18 @@ async def check_ollama_available():
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             # Проверяем здоровье сервиса
-            resp = await client.get(f"{settings.OLLAMA_HOST}/api/tags")
+            resp = await client.get(f"{settings.PARSER_OLLAMA_HOST}/api/tags")
             resp.raise_for_status()
             models = resp.json().get("models", [])
             model_names = [m["name"] for m in models]
             
             # Ищем нужную модель (частичное совпадение имени)
-            if not any(settings.LLM_MODEL in name for name in model_names):
-                pytest.skip(f"Model '{settings.LLM_MODEL}' not found in Ollama. Available: {model_names}")
+            if not any(settings.PARSER_LLM_MODEL in name for name in model_names):
+                pytest.skip(f"Model '{settings.PARSER_LLM_MODEL}' not found in Ollama. Available: {model_names}")
                 
         return True
     except Exception as e:
-        pytest.skip(f"Ollama not available at {settings.OLLAMA_HOST}: {e}")
+        pytest.skip(f"Ollama not available at {settings.PARSER_OLLAMA_HOST}: {e}")
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ async def matcher_service_real(check_ollama_available):
     # 2. Создаем реальный LLM клиент
     llm = LLMVerifier()
     # Переопределяем хост, если он отличается от дефолтного в конфиге
-    llm._client = ollama.AsyncClient(host=settings.OLLAMA_HOST)
+    llm._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
     
     # 3. Кэш
     cache = TTLCache()

@@ -26,4 +26,4 @@ async def match_names(
 @router.get('/health_matching')
 async def health():
     from app.config import settings
-    return {'status': 'ok', 'embed_model': settings.EMBED_MODEL, 'llm_model': settings.LLM_MODEL}
+    return {'status': 'ok', 'embed_model': settings.PARSER_EMBED_MODEL, 'llm_model': settings.PARSER_LLM_MODEL}

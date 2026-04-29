@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class LLMVerifier:
     def __init__(self):
-        self._client = ollama.AsyncClient(host=settings.OLLAMA_HOST)
+        self._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
     
     async def verify(self, internal_name: str, candidates: list[str],
                      best_match: str, vec_score: float, specs: dict) -> dict:
@@ -44,7 +44,7 @@ class LLMVerifier:
 
         try:
             resp = await self._client.chat(
-                model=settings.LLM_MODEL,
+                model=settings.PARSER_LLM_MODEL,
                 messages=[{'role': 'system', 'content': sys_prompt}, {'role': 'user', 'content': user_prompt}],
                 options={'temperature': 0.1, 'num_ctx': 2048},
                 format='json'

@@ -1,0 +1,11 @@
+{% extends "user/base.html" %}
+
+{% block content %}
+    <h2>Файл обработан</h2>
+
+    <p>Import ID: {{ import_id }}</p>
+
+    <p>Данные успешно загружены и обработаны.</p>
+
+    <a href="/v1/{{ import_id }}/report">Получить отчет</a>
+{% endblock %}

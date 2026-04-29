@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin</title>
+    <link rel="stylesheet" href="/static/admin/admin.css">
+</head>
+<body>
+    
+    <header>
+        <h1>FG AI SERVICE Admin</h1>
+        <div class="user">
+            {{ user.email }}
+        </div>
+    </header>
+
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="/admin">Dashboard</a></li>
+                <li><a href="/admin/users">Users</a></li>
+                <li><a href="/user">User Dashboard</a></li>
+            </ul>
+        </nav>
+
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+</body>
+</html>

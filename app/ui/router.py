@@ -1,0 +1,80 @@
+from fastapi import APIRouter, Depends, Request, Form, Response
+from fastapi.responses import RedirectResponse, HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from app.models.user import User
+from app.api.dependencies import get_current_user, get_db, get_current_user_or_none
+from app.core.security import verify_password, hash_password
+from app.auth.jwt_handler import create_access_token_for_user, create_refresh_token_for_user
+from app.services.auth_service import _clear_auth_cookies, _set_auth_cookies
+from app.core.templates import templates
+
+
+router = APIRouter(tags=['UI'])
+
+
+@router.get('/', response_class=HTMLResponse)
+async def get_main_page(request: Request):
+    return RedirectResponse('/login', status_code=302)
+
+
+@router.get('/login', response_class=HTMLResponse)
+async def login_page(
+    request: Request,
+    user: User | None = Depends(get_current_user_or_none)
+):
+    # если уже есть токен и пользователь валиден — редирект
+    if isinstance(user, User):
+        if user:
+            if user.role == 'ADMIN':
+                return RedirectResponse('/admin', status_code=302)
+            return RedirectResponse('/user', status_code=302)
+    
+    # print(templates.get_template('/ui/login.html'))
+
+    return templates.TemplateResponse(
+        '/ui/login.html',
+        {'request': request}
+    )
+
+
+@router.post('/login')
+async def user_login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(User).where(User.email == username))
+    user = result.scalar_one_or_none()
+
+    if (
+        not user
+        or not verify_password(password, user.password_hash)
+        or not user.is_active
+    ):
+        return templates.TemplateResponse(
+            '/ui/login.html',
+            {'request': request, 'error': 'Invalid credintials or not user'},
+            status_code=400,
+        )
+    
+    access_token = create_access_token_for_user(user.id)
+    refresh_token = create_refresh_token_for_user(user.id)
+
+    response = RedirectResponse(
+        url='/login',
+        status_code=302
+    )
+
+    _set_auth_cookies(response, access_token, refresh_token)
+
+    return response
+
+
+@router.get('/logout')
+async def logout():
+    response = RedirectResponse(url='/', status_code=302)
+    _clear_auth_cookies(response)
+    return response

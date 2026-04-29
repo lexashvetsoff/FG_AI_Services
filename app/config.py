@@ -11,9 +11,11 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASS: str
     DB_NAME: str
-    EMBED_MODEL: str = "sergeyzh/LaBSE-ru-sts"
-    LLM_MODEL: str = "qwen2.5:14b"
-    OLLAMA_HOST: str = "http://127.0.0.1:11434"
+    PARSER_EMBED_MODEL: str = "sergeyzh/LaBSE-ru-sts"
+    PARSER_LLM_MODEL: str = "qwen2.5:14b"
+    PARSER_OLLAMA_HOST: str = "http://127.0.0.1:11434"
+    ANALYST_LLM_MODEL: str = 'gemma4:e4b'
+    ANALYST_OLLAMA_HOST: str = 'http://10.10.22.201:11434'
     OLLAMA_TIMEOUT: int = 30
     THRESHOLD_HIGH: float = 0.82
     THRESHOLD_LOW: float = 0.60
@@ -25,6 +27,9 @@ class Settings(BaseSettings):
     VALID_CLIENTS: dict = {}
     INITIAL_ADMIN_EMAIL: str | None = None
     INITIAL_ADMIN_PASSWORD: str | None = None
+    USER_ACCESS_TOKEN_EXPIRE_MINUTES: int
+    USER_REFRESH_TOKEN_EXPIRE_DAYS: int
+    STORAGE_ROOT: str = 'app/storage'
 
     @field_validator("VALID_CLIENTS", mode="before")
     @classmethod
