@@ -26,30 +26,66 @@ class ContextBuilder:
         }
     
     async def _get_sity_metrics(self, import_id: str):
+        # query = text("""
+        # SELECT city, avg_price, price_dispersion, avg_discount
+        # FROM city_metrics
+        # WHERE import_id = :import_id
+        # """)
         query = text("""
-        SELECT city, avg_price, price_dispersion, avg_discount
+        SELECT
+            city,
+            price_segment,
+            avg_price,
+            price_dispersion,
+            avg_discount
         FROM city_metrics
         WHERE import_id = :import_id
+        ORDER BY city, price_segment
         """)
 
         result = await self.session.execute(query, {'import_id': import_id})
         return [dict(r._mapping) for r in result]
     
     async def _get_competitors(self, import_id: str):
+        # query = text("""
+        # SELECT city, pharmacy_name, price_index, category
+        # FROM competitor_metrics
+        # WHERE import_id = :import_id
+        # ORDER BY city, price_index
+        # """)
         query = text("""
-        SELECT city, pharmacy_name, price_index, category
+        SELECT
+            city,
+            price_segment,
+            pharmacy_name,
+            price_index,
+            category
         FROM competitor_metrics
         WHERE import_id = :import_id
-        ORDER BY city, price_index
+        ORDER BY city, price_segment, price_index
         """)
 
         result = await self.session.execute(query, {'import_id': import_id})
         return [dict(r._mapping) for r in result]
     
     async def _get_product_menrics(self, import_id: str):
+        # query = text("""
+        # SELECT
+        #     city,
+        #     product_name,
+        #     avg_price,
+        #     min_price,
+        #     max_price,
+        #     std_dev
+        # FROM product_metrics
+        # WHERE import_id = :import_id
+        # ORDER BY std_dev DESC
+        # LIMIT 50
+        # """)
         query = text("""
         SELECT
             city,
+            price_segment,
             product_name,
             avg_price,
             min_price,
@@ -66,9 +102,33 @@ class ContextBuilder:
     
     async def _get_overpriced_products(self, import_id: str):
         """Завышенные товары (самый важный инсайт)"""
+        # query = text("""
+        # SELECT
+        #     np.city,
+        #     np.product_name,
+        #     np.pharmacy_name,
+        #     np.price,
+        #     comp.avg_price,
+        #     (np.price / comp.avg_price - 1) AS overprice_ratio
+        # FROM normalized_prices np
+        # JOIN (
+        #     SELECT city, product_name, AVG(price) AS avg_price
+        #     FROM normalized_prices
+        #     WHERE is_our = false
+        #     GROUP BY city, product_name
+        # ) comp
+        #     ON np.city = comp.city
+        #     AND np.product_name = comp.product_name
+        # WHERE np.import_id = :import_id
+        #     AND np.is_our = true
+        #     AND np.price > comp.avg_price * 1.1
+        # ORDER BY overprice_ratio DESC
+        # LIMIT 30
+        # """)
         query = text("""
         SELECT
             np.city,
+            np.price_segment,
             np.product_name,
             np.pharmacy_name,
             np.price,
@@ -76,16 +136,21 @@ class ContextBuilder:
             (np.price / comp.avg_price - 1) AS overprice_ratio
         FROM normalized_prices np
         JOIN (
-            SELECT city, product_name, AVG(price) AS avg_price
+            SELECT
+                city,
+                product_name,
+                price_segment,
+                AVG(price) AS avg_price
             FROM normalized_prices
             WHERE is_our = false
-            GROUP BY city, product_name
+            GROUP BY city, product_name, price_segment
         ) comp
-            ON np.city = comp.city
-            AND np.product_name = comp.product_name
+        ON np.city = comp.city
+        AND np.product_name = comp.product_name
+        AND np.price_segment = comp.price_segment
         WHERE np.import_id = :import_id
-            AND np.is_our = true
-            AND np.price > comp.avg_price * 1.1
+        AND np.is_our = true
+        AND np.price > comp.avg_price * 1.1
         ORDER BY overprice_ratio DESC
         LIMIT 30
         """)
@@ -98,6 +163,7 @@ class ContextBuilder:
         query = text("""
         SELECT
             np.city,
+            np.price_segment,
             np.product_name,
             np.pharmacy_name,
             np.price,
@@ -105,13 +171,18 @@ class ContextBuilder:
             (1 - np.price / comp.avg_price) AS discount_ratio
         FROM normalized_prices np
         JOIN (
-            SELECT city, product_name, AVG(price) AS avg_price
+            SELECT 
+                city,
+                product_name,
+                price_segment,
+                AVG(price) AS avg_price
             FROM normalized_prices
             WHERE is_our = false
-            GROUP BY city, product_name
+            GROUP BY city, product_name, price_segment
         ) comp
         ON np.city = comp.city
         AND np.product_name = comp.product_name
+        AND np.price_segment = comp.price_segment
         WHERE np.import_id = :import_id
         AND np.is_our = true
         AND np.price < comp.avg_price * 0.9
@@ -127,6 +198,7 @@ class ContextBuilder:
         query = text("""
         SELECT
             city,
+            price_segment,
             product_name,
             avg_price,
             std_dev,
@@ -148,6 +220,7 @@ class ContextBuilder:
         FROM (
             SELECT
                 city,
+                price_segment,
                 pharmacy_name,
                 price_index,
                 category,

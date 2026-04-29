@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 from uuid import UUID
 from typing import List
@@ -15,6 +16,7 @@ class NormalizedPriceDTO:
     is_our: bool
     price: Decimal | None
     purchase_price: Decimal | None
+    price_segment: Decimal | None
 
 
 class ExcelProcessor:
@@ -22,10 +24,20 @@ class ExcelProcessor:
         df = self._preprocess(df)
         result: List[NormalizedPriceDTO] = []
         start_row = structure.header_row + 2    # данные начинаются ниже
+        current_segment = None
 
         for row_idx in range(start_row, len(df)):
             row = df.iloc[row_idx]
 
+            raw_value = row.iloc[structure.product_col]
+
+            # 1. Проверяем сегмент
+            segment = self._extract_segment(raw_value)
+            if segment:
+                current_segment = segment
+                continue
+
+            # 2. Товар
             product_name = self._extract_product_name(
                 row,
                 structure.product_col
@@ -45,7 +57,8 @@ class ExcelProcessor:
                     pharmacy_name=block.name,
                     is_our=block.is_our,
                     price=price,
-                    purchase_price=None # добавим позже
+                    purchase_price=None, # добавим позже
+                    price_segment=current_segment
                 )
 
                 result.append(dto)
@@ -110,3 +123,17 @@ class ExcelProcessor:
             return None
         
         return Decimal(str(num))
+    
+    def _extract_segment(self, value: str | None) -> str | None:
+        if not isinstance(value, str):
+            return None
+        
+        value = value.strip()
+
+        # паттерн: 0-150, 151-500 ...
+        match = re.match(r"^\d+\s*-\s*\d+$", value)
+
+        if match:
+            return value
+        
+        return None
