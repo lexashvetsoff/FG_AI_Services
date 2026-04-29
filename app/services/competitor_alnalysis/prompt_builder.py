@@ -7,26 +7,45 @@ class PromptBuilder:
         return f"""
 Ты аналитик фармацевтического ритейла.
 
-Твоя задача — проанализировать данные мониторинга цен конкурентов.
+Тебе даны агрегированные данные мониторинга цен.
 
 Данные:
 
-ГОРОДА:
+=== ГОРОДА ===
 {json.dumps(context['cities'], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
 
-КОНКУРЕНТЫ:
+=== КОНКУРЕНТЫ ===
 {json.dumps(context['competitors'], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
 
-Сделай:
+=== ТОВАРЫ (TOP по разбросу цен) ===
+{json.dumps(context['products'], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
 
-1. Классификацию городов по уровню цен
-2. Анализ конкурентов (кто дешевый, кто дорогой)
-3. Где наши аптеки дают наибольшую скидку
-4. Выяви аномалии
-5. Дай 3-5 практических рекомендаций
+=== ЗАВЫШЕННЫЕ ТОВАРЫ ===
+{json.dumps(context["overpriced"], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
+
+=== НЕДООЦЕНЕННЫЕ ТОВАРЫ ===
+{json.dumps(context["underpriced"], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
+
+=== ВЫСОКИЙ РАЗБРОС ===
+{json.dumps(context["high_variance"], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
+
+=== ЛИДЕРЫ ПО ГОРОДАМ ===
+{json.dumps(context["city_leaders"], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
+
+Сделай отчет:
+
+1. Общая ситуация по городам
+2. Кто демпингует / кто дорогой
+3. Где мы теряем деньги (недооценка)
+4. Где мы проигрываем рынку (завышение)
+5. Товары с нестабильным рынком
+6. 5 конкретных действий:
+   - изменить цену
+   - пересмотреть стратегию
+   - обратить внимание на товары
 
 Формат:
-- структурированный текст
-- без воды
-- с конкретикой
+- четко
+- по пунктам
+- с конкретными товарами и городами
 """
