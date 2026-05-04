@@ -10,4 +10,5 @@ def dto_to_dict(dto: NormalizedPriceDTO):
         'is_our': dto.is_our,
         'price': dto.price,
         'purchase_price': dto.purchase_price,
+        'price_segment': dto.price_segment
     }

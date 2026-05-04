@@ -16,7 +16,7 @@ class NormalizedPriceDTO:
     is_our: bool
     price: Decimal | None
     purchase_price: Decimal | None
-    price_segment: Decimal | None
+    price_segment: str | None
 
 
 class ExcelProcessor:
@@ -122,18 +122,50 @@ class ExcelProcessor:
         if num <= 0:
             return None
         
+        if num < 1:
+            return None
+        
         return Decimal(str(num))
     
+    # def _extract_segment(self, value: str | None) -> str | None:
+    #     if not isinstance(value, str):
+    #         return None
+        
+    #     value = value.strip()
+
+    #     # паттерн: 0-150, 151-500 ...
+    #     match = re.match(r"^\d+\s*-\s*\d+$", value)
+
+    #     if match:
+    #         return value
+        
+    #     return None
+
     def _extract_segment(self, value: str | None) -> str | None:
         if not isinstance(value, str):
             return None
         
-        value = value.strip()
+        raw = value.strip().lower()
 
-        # паттерн: 0-150, 151-500 ...
-        match = re.match(r"^\d+\s*-\s*\d+$", value)
+        # --- 1. Классический диапазон: 100-500
+        match_range = re.match(r"^(\d+)\s*-\s*(\d+)$", raw)
+        if match_range:
+            return f"{match_range.group(1)}-{match_range.group(2)}"
 
-        if match:
-            return value
-        
+        # --- 2. Свыше / > / от / +
+        match_above = re.match(r"(свыше|>|от)\s*(\d+)", raw)
+        if match_above:
+            num = match_above.group(2)
+            return f"{num}+"  # нормализуем
+
+        match_plus = re.match(r"^(\d+)\+$", raw)
+        if match_plus:
+            return f"{match_plus.group(1)}+"
+
+        # --- 3. До / <
+        match_below = re.match(r"(до|<)\s*(\d+)", raw)
+        if match_below:
+            num = match_below.group(2)
+            return f"0-{num}"
+
         return None

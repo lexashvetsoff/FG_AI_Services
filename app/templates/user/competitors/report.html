@@ -1,7 +1,220 @@
 {% extends "user/base.html" %}
 
 {% block content %}
-    <h2>Аналитический отчет</h2>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            /* margin: 40px; */
+            background: #f7f7f7;
+        }
 
-    <pre>{{ report }}</pre>
+        .toolbar {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 15px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            z-index: 100;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        input, select {
+            padding: 8px;
+            font-size: 14px;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+        }
+
+        .segment {
+            background: white;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .segment h3 {
+            margin-top: 0;
+        }
+
+        .segment-header {
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .segment-content {
+            margin-top: 15px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* таблицы */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            display: block;
+            overflow-x: auto;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        th {
+            background-color: #f0f0f0;
+        }
+
+        /* перенос длинных строк */
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        strong {
+            color: #222;
+        }
+
+        code {
+            background: #eee;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+
+        mark {
+            background: yellow;
+        }
+    </style>
+
+    <h1>Аналитический отчет</h1>
+
+    <div class="toolbar">
+        <input type="text" id="searchInput" placeholder="Поиск...">
+
+        <select id="segmentFilter">
+            <option value="">Все сегменты</option>
+            {% for s in segments %}
+                <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+        </select>
+
+        <button onclick="expandAll()">Развернуть всё</button>
+        <button onclick="collapseAll()">Свернуть всё</button>
+    </div>
+
+    <div class="container"></div>
+        {% for r in reports %}
+            <!-- <div class="segment">
+                <h3>Сегмент {{ r.segment }}</h3>
+
+                <div>
+                    {{ r.html | safe }}
+                </div>
+            </div> -->
+            <div class="segment" data-segment="{{ r.segment }}">
+
+                <div class="segment-header" onclick="toggle(this)">
+                    <h3>Сегмент {{ r.segment }}</h3>
+                    <span>▼</span>
+                </div>
+
+                <div class="segment-content">
+                    {{ r.html | safe }}
+                </div>
+
+            </div>
+        {% endfor %}
+
+        <div class="segment">
+            <div class="segment-header" onclick="toggle(this)">
+                <h3>Общий вывод</h3>
+                <span>▼</span>
+            </div>
+            <div class="segment-content">{{ summary_report | safe }}</div>
+        </div>
+    </div>
+
+    <!-- <h2>Общий вывод</h2>
+    <div class="segment">{{ summary_report | safe }}</div> -->
+
+    <script>
+    /* ПОИСК */
+    document.getElementById("searchInput").addEventListener("input", function() {
+        let query = this.value.toLowerCase();
+
+        document.querySelectorAll(".segment").forEach(seg => {
+            let text = seg.innerText.toLowerCase();
+
+            if (text.includes(query)) {
+                seg.style.display = "";
+                highlight(seg, query);
+            } else {
+                seg.style.display = "none";
+            }
+        });
+    });
+
+    /* подсветка */
+    function highlight(element, query) {
+        if (!query) return;
+
+        let innerHTML = element.innerHTML;
+        let regex = new RegExp(`(${query})`, "gi");
+        element.innerHTML = innerHTML.replace(regex, "<mark>$1</mark>");
+    }
+
+    /* 🎛 фильтр по сегменту */
+    document.getElementById("segmentFilter").addEventListener("change", function() {
+        let selected = this.value;
+
+        document.querySelectorAll(".segment").forEach(seg => {
+            if (!selected || seg.dataset.segment === selected) {
+                seg.style.display = "";
+            } else {
+                seg.style.display = "none";
+            }
+        });
+    });
+
+    /* toggle */
+    function toggle(header) {
+        let content = header.nextElementSibling;
+        content.classList.toggle("hidden");
+    }
+
+    /* expand/collapse */
+    function expandAll() {
+        document.querySelectorAll(".segment-content").forEach(el => {
+            el.classList.remove("hidden");
+        });
+    }
+
+    function collapseAll() {
+        document.querySelectorAll(".segment-content").forEach(el => {
+            el.classList.add("hidden");
+        });
+    }
+    </script>
 {% endblock %}

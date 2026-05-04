@@ -64,4 +64,5 @@ class ImportService:
             'is_our': dto.is_our,
             'price': dto.price,
             'purchase_price': dto.purchase_price,
+            'price_segment': dto.price_segment
         }

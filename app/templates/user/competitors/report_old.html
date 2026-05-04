@@ -1,0 +1,13 @@
+{% extends "user/base.html" %}
+
+{% block content %}
+    <h1>Аналитический отчет</h1>
+
+    {% for r in reports %}
+        <h2>Сегмент {{ r.segment }}</h2>
+        <pre>{{ r.report }}</pre>
+    {% endfor %}
+
+    <h2>Общий вывод</h2>
+    <pre>{{ summary_report }}</pre>
+{% endblock %}

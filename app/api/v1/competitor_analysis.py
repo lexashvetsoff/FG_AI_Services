@@ -19,14 +19,19 @@ async def get_report(
     user: User = Depends(get_current_user)
 ):
     service = LLMService(db)
-    report = await service.generate_report(import_id)
+    # report = await service.generate_report(import_id)
+    reports = await service.generate_reports(import_id)
+    summary_report = await service.generate_summary_report(import_id, reports)
+    segments = [r['segment'] for r in reports]
 
     return templates.TemplateResponse(
         '/user/competitors/report.html',
         {
             'request': request,
             'user': user,
-            'report': report
+            'reports': reports,
+            'segments': segments,
+            'summary_report': summary_report['html']
         }
     )
 

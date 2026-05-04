@@ -6,16 +6,17 @@ class ContextBuilder:
     def __init__(self, session: AsyncSession):
         self.session = session
     
-    async def build(self, import_id: str):
-        cities = await self._get_sity_metrics(import_id)
-        competitors = await self._get_competitors(import_id)
-        products = await self._get_product_menrics(import_id)
-        overpriced = await self._get_overpriced_products(import_id)
-        underpriced = await self._get_underpriced_product(import_id)
-        high_variance = await self._get_high_variance_products(import_id)
-        city_leaders = await self._get_city_leaders(import_id)
+    async def build(self, import_id: str, segment: str):
+        cities = await self._get_sity_metrics(import_id, segment)
+        competitors = await self._get_competitors(import_id, segment)
+        products = await self._get_product_metrics(import_id, segment)
+        overpriced = await self._get_overpriced_products(import_id, segment)
+        underpriced = await self._get_underpriced_product(import_id, segment)
+        high_variance = await self._get_high_variance_products(import_id, segment)
+        city_leaders = await self._get_city_leaders(import_id, segment)
 
         return {
+            'segment': segment,
             'cities': cities,
             'competitors': competitors,
             'products': products,
@@ -25,7 +26,7 @@ class ContextBuilder:
             'city_leaders': city_leaders
         }
     
-    async def _get_sity_metrics(self, import_id: str):
+    async def _get_sity_metrics(self, import_id: str, segment: str):
         # query = text("""
         # SELECT city, avg_price, price_dispersion, avg_discount
         # FROM city_metrics
@@ -40,13 +41,14 @@ class ContextBuilder:
             avg_discount
         FROM city_metrics
         WHERE import_id = :import_id
-        ORDER BY city, price_segment
+            AND price_segment = :segment
+        ORDER BY city
         """)
 
-        result = await self.session.execute(query, {'import_id': import_id})
+        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
         return [dict(r._mapping) for r in result]
     
-    async def _get_competitors(self, import_id: str):
+    async def _get_competitors(self, import_id: str, segment: str):
         # query = text("""
         # SELECT city, pharmacy_name, price_index, category
         # FROM competitor_metrics
@@ -62,13 +64,14 @@ class ContextBuilder:
             category
         FROM competitor_metrics
         WHERE import_id = :import_id
-        ORDER BY city, price_segment, price_index
+            AND price_segment = :segment
+        ORDER BY city, price_index
         """)
 
-        result = await self.session.execute(query, {'import_id': import_id})
+        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
         return [dict(r._mapping) for r in result]
     
-    async def _get_product_menrics(self, import_id: str):
+    async def _get_product_metrics(self, import_id: str, segment: str):
         # query = text("""
         # SELECT
         #     city,
@@ -93,14 +96,15 @@ class ContextBuilder:
             std_dev
         FROM product_metrics
         WHERE import_id = :import_id
+            AND price_segment = :segment
         ORDER BY std_dev DESC
         LIMIT 50
         """)
 
-        result = await self.session.execute(query, {'import_id': import_id})
+        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
         return [dict(r._mapping) for r in result]
     
-    async def _get_overpriced_products(self, import_id: str):
+    async def _get_overpriced_products(self, import_id: str, segment: str):
         """Завышенные товары (самый важный инсайт)"""
         # query = text("""
         # SELECT
@@ -143,22 +147,24 @@ class ContextBuilder:
                 AVG(price) AS avg_price
             FROM normalized_prices
             WHERE is_our = false
+                AND price_segment = :segment
             GROUP BY city, product_name, price_segment
         ) comp
         ON np.city = comp.city
-        AND np.product_name = comp.product_name
-        AND np.price_segment = comp.price_segment
+            AND np.product_name = comp.product_name
+            AND np.price_segment = comp.price_segment
         WHERE np.import_id = :import_id
-        AND np.is_our = true
-        AND np.price > comp.avg_price * 1.1
+            AND np.price_segment = :segment
+            AND np.is_our = true
+            AND np.price > comp.avg_price * 1.1
         ORDER BY overprice_ratio DESC
         LIMIT 30
         """)
 
-        result = await self.session.execute(query, {'import_id': import_id})
+        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
         return [dict(r._mapping) for r in result]
     
-    async def _get_underpriced_product(self, import_id: str):
+    async def _get_underpriced_product(self, import_id: str, segment: str):
         """Недооцененные товары (потеря прибыли)"""
         query = text("""
         SELECT
@@ -178,22 +184,24 @@ class ContextBuilder:
                 AVG(price) AS avg_price
             FROM normalized_prices
             WHERE is_our = false
+                AND price_segment = :segment
             GROUP BY city, product_name, price_segment
         ) comp
         ON np.city = comp.city
-        AND np.product_name = comp.product_name
-        AND np.price_segment = comp.price_segment
+            AND np.product_name = comp.product_name
+            AND np.price_segment = comp.price_segment
         WHERE np.import_id = :import_id
-        AND np.is_our = true
-        AND np.price < comp.avg_price * 0.9
+            AND np.price_segment = :segment
+            AND np.is_our = true
+            AND np.price < comp.avg_price * 0.9
         ORDER BY discount_ratio DESC
         LIMIT 30       
         """)
 
-        result = await self.session.execute(query, {'import_id': import_id})
+        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
         return [dict(r._mapping) for r in result]
     
-    async def _get_high_variance_products(self, import_id: str):
+    async def _get_high_variance_products(self, import_id: str, segment: str):
         """Товары с высоким разбросом"""
         query = text("""
         SELECT
@@ -205,15 +213,16 @@ class ContextBuilder:
             (std_dev / avg_price) AS variation
         FROM product_metrics
         WHERE import_id = :import_id
-        AND avg_price > 0
+            AND price_segment = :segment
+            AND avg_price > 0
         ORDER BY variation DESC
         LIMIT 30
         """)
 
-        result = await self.session.execute(query, {'import_id': import_id})
+        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
         return [dict(r._mapping) for r in result]
     
-    async def _get_city_leaders(self, import_id: str):
+    async def _get_city_leaders(self, import_id: str, segment: str):
         """Лидеры и аутсайдеры по городам"""
         query = text("""
         SELECT *
@@ -228,9 +237,21 @@ class ContextBuilder:
                 RANK() OVER (PARTITION BY city ORDER BY price_index DESC) AS expensive_rank
             FROM competitor_metrics
             WHERE import_id = :import_id
+                AND price_segment = :segment
         ) t
         WHERE cheapest_rank = 1 OR expensive_rank = 1
         """)
 
-        result = await self.session.execute(query, {'import_id': import_id})
+        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
         return [dict(r._mapping) for r in result]
+    
+    async def get_segments(self, import_id: str):
+        query = text("""
+        SELECT DISTINCT price_segment
+        FROM normalized_prices
+        WHERE import_id = :import_id
+        ORDER BY price_segment
+        """)
+
+        result = await self.session.execute(query, {'import_id': import_id})
+        return [r[0] for r in result]
