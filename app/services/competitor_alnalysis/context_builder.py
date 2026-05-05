@@ -26,49 +26,91 @@ class ContextBuilder:
             'city_leaders': city_leaders
         }
     
-    async def _get_sity_metrics(self, import_id: str, segment: str):
+    async def build_chat(self, import_id: str):
+        # пока MVP: просто топ данные
+        cities = await self._get_sity_metrics(import_id)
+        competitors = await self._get_competitors(import_id)
+
+        return {
+            'cities': cities[:10],
+            'competitors': competitors[:20]
+        }
+    
+    async def _get_sity_metrics(self, import_id: str, segment: str = None):
         # query = text("""
         # SELECT city, avg_price, price_dispersion, avg_discount
         # FROM city_metrics
         # WHERE import_id = :import_id
         # """)
-        query = text("""
-        SELECT
-            city,
-            price_segment,
-            avg_price,
-            price_dispersion,
-            avg_discount
-        FROM city_metrics
-        WHERE import_id = :import_id
-            AND price_segment = :segment
-        ORDER BY city
-        """)
+        if segment is None:
+            query = text("""
+            SELECT
+                city,
+                price_segment,
+                avg_price,
+                price_dispersion,
+                avg_discount
+            FROM city_metrics
+            WHERE import_id = :import_id
+            ORDER BY city
+            """)
 
-        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
+            result = await self.session.execute(query, {'import_id': import_id})
+        else:
+            query = text("""
+            SELECT
+                city,
+                price_segment,
+                avg_price,
+                price_dispersion,
+                avg_discount
+            FROM city_metrics
+            WHERE import_id = :import_id
+                AND price_segment = :segment
+            ORDER BY city
+            """)
+
+            result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
+        
         return [dict(r._mapping) for r in result]
     
-    async def _get_competitors(self, import_id: str, segment: str):
+    async def _get_competitors(self, import_id: str, segment: str = None):
         # query = text("""
         # SELECT city, pharmacy_name, price_index, category
         # FROM competitor_metrics
         # WHERE import_id = :import_id
         # ORDER BY city, price_index
         # """)
-        query = text("""
-        SELECT
-            city,
-            price_segment,
-            pharmacy_name,
-            price_index,
-            category
-        FROM competitor_metrics
-        WHERE import_id = :import_id
-            AND price_segment = :segment
-        ORDER BY city, price_index
-        """)
+        if segment is None:
+            query = text("""
+            SELECT
+                city,
+                price_segment,
+                pharmacy_name,
+                price_index,
+                category
+            FROM competitor_metrics
+            WHERE import_id = :import_id
+            ORDER BY city, price_index
+            """)
 
-        result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
+            result = await self.session.execute(query, {'import_id': import_id})
+        else:
+            query = text("""
+            SELECT
+                city,
+                price_segment,
+                pharmacy_name,
+                price_index,
+                category
+            FROM competitor_metrics
+            WHERE import_id = :import_id
+                AND price_segment = :segment
+            ORDER BY city, price_index
+            """)
+
+            result = await self.session.execute(query, {'import_id': import_id, 'segment': segment})
+        
         return [dict(r._mapping) for r in result]
     
     async def _get_product_metrics(self, import_id: str, segment: str):

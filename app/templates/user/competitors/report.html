@@ -106,6 +106,34 @@
         mark {
             background: yellow;
         }
+
+        .chat-box {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 350px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 10px;
+        }
+
+        #chatMessages {
+            height: 250px;
+            overflow-y: auto;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .msg-user {
+            text-align: right;
+            margin: 5px;
+        }
+
+        .msg-bot {
+            text-align: left;
+            margin: 5px;
+        }
     </style>
 
     <h1>Аналитический отчет</h1>
@@ -158,6 +186,15 @@
 
     <!-- <h2>Общий вывод</h2>
     <div class="segment">{{ summary_report | safe }}</div> -->
+
+    <div class="chat-box">
+        <h3>AI-аналитик</h3>
+
+        <div id="chatMessages"></div>
+
+        <input id="chatInput" placeholder="Задай вопрос...">
+        <button onclick="sendMessage()">Отправить</button>
+    </div>
 
     <script>
     /* ПОИСК */
@@ -215,6 +252,41 @@
         document.querySelectorAll(".segment-content").forEach(el => {
             el.classList.add("hidden");
         });
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById("chatInput");
+        const text = input.value;
+
+        if (!text) return;
+
+        addMessage(text, "user");
+
+        const res = await fetch("/v1/chat", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                import_id: "{{ request.path_params.import_id }}",
+                question: text
+            })
+        });
+
+        const data = await res.json();
+
+        addMessage(data.answer, "bot");
+
+        input.value = "";
+    }
+
+    function addMessage(text, type) {
+        const box = document.getElementById("chatMessages");
+
+        const div = document.createElement("div");
+        div.className = type === "user" ? "msg-user" : "msg-bot";
+        div.innerText = text;
+
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
     }
     </script>
 {% endblock %}

@@ -3,6 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.utils.markdown import md_to_html
+from app.utils.sql_validator import validate_sql
+from app.utils.sql_guard import enforce_import_filter
+from app.services.competitor_alnalysis.sql_executor import execute_sql
 from app.models.competitor_analysis import LLMReport
 from app.ai.competitor_alnalysis.llm import AnalystClient
 from app.services.competitor_alnalysis.prompt_builder import PromptBuilder
@@ -82,3 +85,34 @@ class LLMService:
 
         await self.session.execute(stmt)
         await self.session.commit()
+    
+    async def answer_question(self, import_id: str, question: str):
+        context = await self.context_builder.build_chat(import_id)
+        prompt = self.prompt_builder.build_chat_prompt(question, context)
+        response = await self.client.generate(prompt)
+        return response
+    
+    async def answer_with_sql(self, import_id: str, question: str):
+        # 1. генерим SQL
+        sql_prompt = self.prompt_builder.build_sql_propmt(question, import_id)
+        sql = await self.client.generate(sql_prompt)
+
+        # 2. чистим ответ
+        sql = sql.strip().replace("```sql", "").replace("```", "")
+
+        # 3. валидация
+        if not validate_sql(sql, import_id):
+            # 3.1 Пробуем принудительно добавить фильтр по import_id и проверить еще раз
+            sql = enforce_import_filter(sql, import_id)
+        if not validate_sql(sql, import_id):
+            return f'Ошибка: сгенерирован небезопасный SQL: {sql}'
+        
+        print(sql)
+        # 4. выполнение
+        data = await execute_sql(self.session, sql)
+
+        # 5. объяснение
+        answer_prompt = self.prompt_builder.build_answer_prompt(question, data)
+        answer = await self.client.generate(answer_prompt)
+
+        return answer

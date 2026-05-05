@@ -52,3 +52,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = 'bearer'
     expire_in: int
+
+
+class ChatRequest(BaseModel):
+    import_id: str
+    question: str
