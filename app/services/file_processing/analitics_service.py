@@ -7,6 +7,72 @@ class AnaliticService:
     def __init__(self, session: AsyncSession):
         self.session = session
     
+    async def calculate_pair_metrics(self, import_id: UUID):
+        query = text("""
+        INSERT INTO pair_price_metrics (
+            import_id,
+            city,
+            product_name,
+            price_segment,
+            pair_id,
+            our_pharmacy_name,
+            our_pharmacy_instance,
+            competitor_pharmacy_name,
+            competitor_pharmacy_instance,
+            our_price,
+            competitor_price,
+            diff_abs,
+            diff_pct,
+            status,
+            created_at
+        )
+        SELECT
+            np.import_id,
+            np.city,
+            np.product_name,
+            np.price_segment,
+            np.pair_id,
+
+            np.pharmacy_name AS our_pharmacy_name,
+            np.pharmacy_instance AS our_pharmacy_instance,
+            comp.pharmacy_name AS competitor_pharmacy_name,
+            comp.pharmacy_instance AS competitor_pharmacy_instance,
+
+            np.price AS our_price,
+            comp.price AS competitor_price,
+
+            (np.price - comp.price) AS diff_abs,
+
+            CASE 
+                WHEN comp.price = 0 THEN 0
+                ELSE (np.price - comp.price) / comp.price
+            END AS diff_pct,
+
+            CASE
+                WHEN (np.price - comp.price) / comp.price > 0.05 THEN 'overprice'
+                WHEN (np.price - comp.price) / comp.price < -0.05 THEN 'underprice'
+                ELSE 'parity'
+            END AS status,
+            
+            NOW()
+
+        FROM normalized_prices np
+        JOIN normalized_prices comp
+            ON np.import_id = comp.import_id
+        AND np.city = comp.city
+        AND np.product_name = comp.product_name
+        AND np.pair_id = comp.pair_id
+
+        WHERE np.import_id = :import_id
+        AND np.is_our = true
+        AND comp.is_our = false
+        AND np.price IS NOT NULL
+        AND comp.price IS NOT NULL
+        """)
+
+        await self.session.execute(query, {'import_id': import_id})
+        await self.session.commit()
+    
     async def calculate_competitor_metrics(self, import_id: UUID):
         query = text("""
         WITH market_avg AS (
@@ -24,6 +90,7 @@ class AnaliticService:
             SELECT
                 np.city,
                 np.pharmacy_name,
+                np.pharmacy_instance,
                 np.price_segment,
                 AVG(np.price / ma.avg_price) AS price_index
             FROM normalized_prices np
@@ -32,14 +99,15 @@ class AnaliticService:
                 AND np.product_name = ma.product_name
                 AND np.price_segment = ma.price_segment
             WHERE np.import_id = :import_id
-            GROUP BY np.city, np.pharmacy_name, np.price_segment
+            GROUP BY np.city, np.pharmacy_name, np.pharmacy_instance, np.price_segment
         )
                      
-        INSERT INTO competitor_metrics(import_id, city, pharmacy_name, price_segment, price_index, category, created_at)
+        INSERT INTO competitor_metrics(import_id, city, pharmacy_name, pharmacy_instance, price_segment, price_index, category, created_at)
         SELECT
             :import_id,
             city,
             pharmacy_name,
+            pharmacy_instance,
             price_segment,
             price_index,
             CASE

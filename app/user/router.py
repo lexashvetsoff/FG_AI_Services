@@ -11,6 +11,7 @@ from app.config import settings
 from app.api.dependencies import get_db, get_current_user
 from app.core.templates import templates
 from app.models.user import User
+from app.models.competitor_analysis import Import
 from app.services.file_processing.import_service import ImportService
 
 
@@ -26,11 +27,15 @@ async def user_dashboard(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
+    response = await db.execute(select(Import).order_by(Import.created_at.desc()))
+    imports_data = response.scalars().all()
+
     return templates.TemplateResponse(
         '/user/dashboard.html',
         {
             'request': request,
             'user': user,
+            'imports_data': imports_data
         }
     )
 

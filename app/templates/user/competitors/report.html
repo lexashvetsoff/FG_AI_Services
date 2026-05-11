@@ -70,6 +70,7 @@
             margin-top: 15px;
             display: block;
             overflow-x: auto;
+            table-layout: fixed;
         }
 
         th, td {
@@ -77,6 +78,7 @@
             padding: 8px;
             text-align: left;
             white-space: nowrap;
+            word-wrap: break-word;
         }
 
         th {
@@ -125,7 +127,7 @@
             margin-bottom: 10px;
         }
 
-        .msg-user {
+        /* .msg-user {
             text-align: right;
             margin: 5px;
         }
@@ -133,6 +135,246 @@
         .msg-bot {
             text-align: left;
             margin: 5px;
+        } */
+        
+        /* Общий стиль сообщений */
+        .msg-user, .msg-bot {
+            margin: 12px 8px;
+            padding: 10px 15px;
+            max-width: 85%;
+            border-radius: 20px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            clear: both;
+        }
+
+        /* Сообщения пользователя - справа, цвет акцента */
+        .msg-user {
+            text-align: right;
+            background-color: #007aff; /* синий, как в iMessage */
+            color: white;
+            float: right;
+            border-bottom-right-radius: 5px;
+        }
+
+        /* Сообщения бота - слева, светлый фон */
+        .msg-bot {
+            text-align: left;
+            background-color: #e5e5ea; /* светло-серый */
+            color: #000;
+            float: left;
+            border-bottom-left-radius: 5px;
+        }
+
+        /* Добавим аватарки */
+        .msg-user::before {
+            content: "👤";
+            font-size: 1.5em;
+            display: block;
+            margin-bottom: 4px;
+            opacity: 0.7;
+            text-align: right;
+        }
+
+        .msg-bot::before {
+            content: "🤖";
+            font-size: 1.5em;
+            display: block;
+            margin-bottom: 4px;
+            opacity: 0.7;
+            text-align: left;
+        }
+
+        .report-container {
+            max-width: 100%;
+            overflow-x: auto;
+            padding-right: 10px;
+        }
+
+        /* таблицы */
+        .report-container table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        /* ячейки */
+        .report-container th,
+        .report-container td {
+            padding: 6px 8px;
+            font-size: 13px;
+            
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+
+            max-width: 250px;
+        }
+
+        .report-container th {
+            background: #f5f5f5;
+            font-weight: 600;
+            text-align: left;
+        }
+
+        .report-container tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .report-container tr:hover {
+            background: #f0f7ff;
+        }
+
+        .report-container td:nth-child(4),
+        .report-container td:nth-child(5),
+        .report-container td:nth-child(6) {
+            max-width: 300px;
+        }
+
+        .report-container td:nth-child(4),
+        .report-container td:nth-child(5) {
+            text-align: right;
+            font-family: monospace;
+        }
+
+        /* длинные названия */
+        .report-container td {
+            max-width: 200px;
+        }
+
+        .chat-panel {
+            position: fixed;
+            top: 0;
+            right: -650px;
+            width: 600px;
+            height: 100%;
+            background: #fff;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .chat-panel.open {
+            right: 0;
+        }
+
+        .chat-header {
+            padding: 10px;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .chat-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+        }
+
+        .chat-input input {
+            width: 100%;
+        }
+
+        .chat-body table {
+            width: 100%;
+            font-size: 12px;
+            border-collapse: collapse;
+        }
+
+        .chat-body th,
+        .chat-body td {
+            border: 1px solid #ddd;
+            padding: 4px;
+        }
+
+        .chat-body {
+            overflow-x: auto;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .block {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        /* heatmap */
+        .heat-high { background: #ffcccc; }
+        .heat-mid { background: #ffe0b3; }
+        .heat-low { background: #ccffcc; }
+        .heat-strong-low { background: #99ff99; }
+
+        /* клики */
+        .city-row, .pair-row {
+            cursor: pointer;
+        }
+
+        .city-row:hover, .pair-row:hover {
+            background: #eef6ff;
+        }
+
+        /* Анимация появления сообщений */
+        @keyframes fadeSlideUp {
+            0% {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .msg-user, .msg-bot {
+            animation: fadeSlideUp 0.3s ease-out forwards;
+        }
+
+        /* Индикатор печати (три точки) */
+        .typing-indicator {
+            /* display: inline-block; */
+            background: #e5e5ea;
+            border-radius: 20px;
+            /* padding: 10px 15px; */
+            padding: 5px 10px;
+            margin: 12px 8px;
+            float: left;
+            clear: both;
+            font-size: 14px;
+            color: #555;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #888;
+            margin: 0 2px;
+            animation: blink 1.4s infinite both;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes blink {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
+            40% { opacity: 1; transform: scale(1.2); }
         }
     </style>
 
@@ -142,7 +384,7 @@
         <input type="text" id="searchInput" placeholder="Поиск...">
 
         <select id="segmentFilter">
-            <option value="">Все сегменты</option>
+            <!-- <option value="">Все сегменты</option> -->
             {% for s in segments %}
                 <option value="{{ s }}">{{ s }}</option>
             {% endfor %}
@@ -150,53 +392,115 @@
 
         <button onclick="expandAll()">Развернуть всё</button>
         <button onclick="collapseAll()">Свернуть всё</button>
+
+        <button id="chat-toggle" style="margin-left: auto;">💬 AI</button>
     </div>
 
-    <div class="container"></div>
-        {% for r in reports %}
-            <!-- <div class="segment">
-                <h3>Сегмент {{ r.segment }}</h3>
+    <div class="dashboard">
 
-                <div>
-                    {{ r.html | safe }}
-                </div>
-            </div> -->
-            <div class="segment" data-segment="{{ r.segment }}">
+        <div class="block">
+            <h3>График (сегмент: <span id="currentSegment"></span>)</h3>
+            <canvas id="segmentChart"></canvas>
+        </div>
 
-                <div class="segment-header" onclick="toggle(this)">
+        <!-- heatmap -->
+        <div class="block">
+            <table id="heatmapTable">
+                <thead>
+                    <tr>
+                        <th>Город</th>
+                        <th>Разница %</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- drilldown -->
+        <div class="block" id="drilldown"></div>
+
+    </div>
+
+    <div class="report-container">
+
+        <div class="container"></div>
+            {% for r in reports %}
+                <!-- <div class="segment">
                     <h3>Сегмент {{ r.segment }}</h3>
+
+                    <div>
+                        {{ r.html | safe }}
+                    </div>
+                </div> -->
+                <div class="segment" data-segment="{{ r.segment }}">
+
+                    <div class="segment-header" onclick="toggle(this)">
+                        <h3>Сегмент {{ r.segment }}</h3>
+                        <span>▼</span>
+                    </div>
+
+                    <div class="segment-content">
+                        {{ r.html | safe }}
+                    </div>
+
+                </div>
+            {% endfor %}
+
+            <div class="segment">
+                <div class="segment-header" onclick="toggle(this)">
+                    <h3>Общий вывод</h3>
                     <span>▼</span>
                 </div>
-
-                <div class="segment-content">
-                    {{ r.html | safe }}
-                </div>
-
+                <div class="segment-content">{{ summary_report | safe }}</div>
             </div>
-        {% endfor %}
-
-        <div class="segment">
-            <div class="segment-header" onclick="toggle(this)">
-                <h3>Общий вывод</h3>
-                <span>▼</span>
-            </div>
-            <div class="segment-content">{{ summary_report | safe }}</div>
         </div>
+
     </div>
 
     <!-- <h2>Общий вывод</h2>
     <div class="segment">{{ summary_report | safe }}</div> -->
 
-    <div class="chat-box">
+    <!-- <div class="chat-box">
         <h3>AI-аналитик</h3>
 
         <div id="chatMessages"></div>
 
         <input id="chatInput" placeholder="Задай вопрос...">
         <button onclick="sendMessage()">Отправить</button>
+    </div> -->
+
+    <!-- <button id="chat-toggle">💬 AI</button> -->
+
+    <div id="chat-panel" class="chat-panel">
+        <div class="chat-header">
+            <span>AI-аналитик</span>
+            <button id="chat-close">✖</button>
+        </div>
+
+        <div class="chat-body" id="chatMessages"></div>
+
+        <div class="chat-input">
+            <input type="text" id="chatInput" placeholder="Задай вопрос...">
+            <button onclick="sendMessage()">→</button>
+        </div>
     </div>
 
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
+    /* CHAT*/
+    const panel = document.getElementById('chat-panel');
+    let currentChart = null;
+    let currentTypingIndicator = null;
+
+    document.getElementById('chat-toggle').onclick = () => {
+        panel.classList.toggle('open');
+    };
+
+    document.getElementById('chat-close').onclick = () => {
+        panel.classList.remove('open');
+    };
+
     /* ПОИСК */
     document.getElementById("searchInput").addEventListener("input", function() {
         let query = this.value.toLowerCase();
@@ -222,17 +526,19 @@
         element.innerHTML = innerHTML.replace(regex, "<mark>$1</mark>");
     }
 
-    /* 🎛 фильтр по сегменту */
+    /* фильтр по сегменту */
     document.getElementById("segmentFilter").addEventListener("change", function() {
         let selected = this.value;
 
-        document.querySelectorAll(".segment").forEach(seg => {
-            if (!selected || seg.dataset.segment === selected) {
-                seg.style.display = "";
-            } else {
-                seg.style.display = "none";
-            }
-        });
+        // document.querySelectorAll(".segment").forEach(seg => {
+        //     if (!selected || seg.dataset.segment === selected) {
+        //         seg.style.display = "";
+        //     } else {
+        //         seg.style.display = "none";
+        //     }
+        // });
+        // console.log("Current target segment: ", selected)
+        initDashboard("{{ request.path_params.import_id }}", selected)
     });
 
     /* toggle */
@@ -261,6 +567,9 @@
         if (!text) return;
 
         addMessage(text, "user");
+        input.value = "";
+
+        showTypingIndicator();
 
         const res = await fetch("/v1/chat", {
             method: "POST",
@@ -273,9 +582,11 @@
 
         const data = await res.json();
 
+        removeTypingIndicator();
+
         addMessage(data.answer, "bot");
 
-        input.value = "";
+        // input.value = "";
     }
 
     function addMessage(text, type) {
@@ -283,10 +594,268 @@
 
         const div = document.createElement("div");
         div.className = type === "user" ? "msg-user" : "msg-bot";
-        div.innerText = text;
+        // div.innerText = text;
+        if (type === "user") {
+            div.innerText = text;
+        } else {
+            div.innerHTML = text;
+        }
 
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
     }
+
+    function showTypingIndicator() {
+        const box = document.getElementById("chatMessages");
+        const div = document.createElement("div");
+        div.className = "typing-indicator";
+        div.innerHTML = '<span></span><span></span><span></span>';
+        div.id = "typingIndicator";
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+        currentTypingIndicator = div;
+    }
+
+    function removeTypingIndicator() {
+        if (currentTypingIndicator) {
+            currentTypingIndicator.remove();
+            currentTypingIndicator = null;
+        }
+    }
+
+    /* ЧАРТЫ, ПОДСВЕТКА И ТД */
+
+    /* Загрузка heatmap */
+    async function loadHeatmap(importId, segment) {
+        const res = await fetch(`/v1/heatmap?import_id=${encodeURIComponent(importId)}&segment=${encodeURIComponent(segment)}`);
+        const data = await res.json();
+
+        const tbody = document.querySelector("#heatmapTable tbody");
+        tbody.innerHTML = "";
+
+        data.forEach(row => {
+            const tr = document.createElement("tr");
+            tr.classList.add("city-row");
+            tr.dataset.city = row.city;
+            tr.dataset.diff = row.avg_diff_pct;
+
+            tr.innerHTML = `
+                <td>${row.city}</td>
+                <td data-diff="${row.avg_diff_pct}">
+                    ${row.avg_diff_pct.toFixed(2)}%
+                </td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+
+        applyHeatmapColors();
+        bindCityClicks(importId, segment);
+    }
+
+    /* Цвета (heatmap) */ 
+    function applyHeatmapColors() {
+        document.querySelectorAll("[data-diff]").forEach(el => {
+            const val = parseFloat(el.dataset.diff);
+
+            // console.log("applyHeatmapColors val: ", val, "   el: ", el)
+            if (val > 0.05) el.classList.add("heat-high");
+            else if (val > 0.02) el.classList.add("heat-mid");
+            else if (val < -0.05) el.classList.add("heat-strong-low");
+            else if (val < -0.02) el.classList.add("heat-low");
+        });
+    }
+
+    /* Клик по городу → drill-down */
+    function bindCityClicks(importId, segment) {
+        document.querySelectorAll(".city-row").forEach(row => {
+            row.onclick = async () => {
+                const city = row.dataset.city;
+
+                const res = await fetch(
+                    `/v1/city_details?import_id=${encodeURIComponent(importId)}&city=${city}&segment=${encodeURIComponent(segment)}`
+                );
+
+                const data = await res.json();
+                renderDrilldown(data);
+            };
+        });
+    }
+
+    /* Рендер drill-down */
+    function renderDrilldown(data) {
+        const container = document.getElementById("drilldown");
+
+        container.innerHTML = `
+            <table>
+                <tr>
+                    <th>Наша</th>
+                    <th>Конкурент</th>
+                    <th>Разница %</th>
+                </tr>
+                ${data.map(r => `
+                    <tr class="pair-row"
+                        data-our="${r.our_pharmacy_instance}"
+                        data-comp="${r.competitor_pharmacy_instance}"
+                        data-diff="${r.avg_diff_pct}">
+                        <td>${r.our_pharmacy_instance}</td>
+                        <td>${r.competitor_pharmacy_instance}</td>
+                        <td data-diff="${r.avg_diff_pct}">
+                            ${r.avg_diff_pct.toFixed(2)}%
+                        </td>
+                    </tr>
+                `).join("")}
+            </table>
+        `;
+
+        applyHeatmapColors();
+        bindPairClicks();
+    }
+
+    /* Клик по строке → чат */
+    function bindPairClicks() {
+        document.querySelectorAll(".pair-row").forEach(row => {
+            row.onclick = () => {
+                const our = row.dataset.our;
+                const comp = row.dataset.comp;
+                const diff = parseFloat(row.dataset.diff);
+
+                let currentSegment = document.getElementById("segmentFilter")?.value || '';
+
+                // Если выбран "Все сегменты" (value === "")
+                if (currentSegment === "") {
+                    const firstRealSegment = Array.from(
+                        document.querySelectorAll("#segmentFilter option")
+                    ).find(opt => opt.value !== "");
+                    currentSegment = firstRealSegment ? firstRealSegment.value : "";
+                }
+
+                // const question = `Почему ${our} дороже ${comp} в сегменте ${currentSegment}?`;
+                let question;
+
+                // console.log("bindPairClicks diff: ", diff);
+                // console.log(row.dataset);
+
+                // if (diff > 0.03) {
+                //     question =
+                //         `Почему ${our} дороже ${comp} ` +
+                //         `в сегменте ${currentSegment}?`;
+                // }
+                // else if (diff < -0.03) {
+                //     question =
+                //         `Почему ${our} дешевле ${comp} ` +
+                //         `в сегменте ${currentSegment}?`;
+                // }
+                // else {
+                //     question =
+                //         `Почему цены ${our} и ${comp} ` +
+                //         `почти одинаковые в сегменте ${currentSegment}?`;
+                // }
+
+                question = `Анализ цен ${our} относительно конкурента в ценовом сегменте ${currentSegment}`;
+
+                // console.log(question);
+                openChat(question);
+            };
+        });
+    }
+
+    /* Открытие чата */
+    function openChat(question) {
+        const panel = document.getElementById("chat-panel");
+        panel.classList.add("open");
+
+        document.getElementById("chatInput").value = question;
+
+        sendMessage();
+    }
+
+    /* График */
+    async function loadChart(importId, segment) {
+        const res = await fetch(`/v1/chart?import_id=${encodeURIComponent(importId)}&segment=${encodeURIComponent(segment)}`);
+        const data = await res.json();
+
+        // console.log("LOAD CHART")
+        // console.log(data)
+        // console.log("segment: ", segment)
+
+        const labels = data.map(d => d.pharmacy_name);
+        const values = data.map(d => Number(d.price_index));
+
+        const colors = values.map(v => {
+            if (v > 1.05) return "#ff4d4d";
+            if (v < 0.95) return "#4da6ff";
+            return "#66cc66";
+        });
+
+        if (currentChart) {
+            currentChart.destroy();
+        }
+
+        // currentChart = new Chart(document.getElementById("segmentChart"), {
+        //     type: "bar",
+        //     data: {
+        //         labels: data.map(d => d.pharmacy_name),
+        //         datasets: [{
+        //             label: "Price Index",
+        //             data: data.map(d => d.price_index)
+        //         }]
+        //     }
+        // });
+        currentChart = new Chart(document.getElementById("segmentChart"), {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "Price Index",
+                    data: values,
+                    backgroundColor: colors
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    /* Инициализация */
+    function initDashboard(importId, segment) {
+        if (!segment) {
+            segment = document.querySelector("#segmentFilter option:nth-child(1)")?.value;
+        }
+
+        document.getElementById("currentSegment").innerText = segment;
+
+        console.log("initDashboard")
+        console.log("import_id =", importId);
+        console.log("segment =", segment);
+
+        loadHeatmap(importId, segment);
+        loadChart(importId, segment);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // import_id: "{{ request.path_params.import_id }}",
+        console.log("DOMContentLoaded")
+        console.log("import_id =", "{{ request.path_params.import_id }}");
+        console.log("segment =", "{{ segment }}");
+        initDashboard("{{ request.path_params.import_id }}", "{{ segment }}");
+    });
+
+    const chatInput = document.getElementById("chatInput");
+    if (chatInput) {
+        chatInput.addEventListener("keypress", function(event) {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();   // предотвращает возможную отправку формы
+                sendMessage();
+            }
+        });
+    }
+
     </script>
 {% endblock %}

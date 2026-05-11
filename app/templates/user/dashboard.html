@@ -1,6 +1,33 @@
 {% extends "user/base.html" %}
 
 {% block content %}
-<h2>Dashboard</h2>
-<p>User UI is alive 🚀</p>
+
+<h1>Главная панель</h1>
+<hr>
+
+<h2>Загруженные отчеты</h2>
+
+<table border="1" cellpadding="6"  cellspacing="0" width="100%">
+    <thead>
+        <tr>
+            <th>Дата загрузки</th>
+            <th>Файл</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+
+        {% for item in imports_data %}
+            <tr>
+                <td>{{ item.created_at }}</td>
+                <td>{{ item.file_name }}</td>
+                <td><a href="/v1/{{ item.id }}/report">Отчет</a></td>
+            </tr>
+        {% else %}
+            <tr><td colspan="8">Нет загруженных отчетов</td></tr>
+        {% endfor %}
+
+    </tbody>
+</table>
+
 {% endblock %}

@@ -13,10 +13,13 @@ class NormalizedPriceDTO:
     city: str
     product_name: str
     pharmacy_name: str
+    pharmacy_instance: str
     is_our: bool
     price: Decimal | None
     purchase_price: Decimal | None
     price_segment: str | None
+    pair_id: int
+    competitor_name: str | None
 
 
 class ExcelProcessor:
@@ -45,23 +48,67 @@ class ExcelProcessor:
             if not product_name:
                 continue
 
-            for block in structure.pharmacy_blocks:
-                price = self._extract_price(row, block.price_col)
-                if price is None:
-                    continue
+            # for block in structure.pharmacy_blocks:
+            #     price = self._extract_price(row, block.price_col)
+            #     if price is None:
+            #         continue
 
-                dto = NormalizedPriceDTO(
-                    import_id=import_id,
-                    city=structure.city,
-                    product_name=product_name,
-                    pharmacy_name=block.name,
-                    is_our=block.is_our,
-                    price=price,
-                    purchase_price=None, # добавим позже
-                    price_segment=current_segment
-                )
+            #     dto = NormalizedPriceDTO(
+            #         import_id=import_id,
+            #         city=structure.city,
+            #         product_name=product_name,
+            #         pharmacy_name=block.name,
+            #         is_our=block.is_our,
+            #         price=price,
+            #         purchase_price=None, # добавим позже
+            #         price_segment=current_segment
+            #     )
 
-                result.append(dto)
+            #     result.append(dto)
+            for pair_id, pair in enumerate(structure.pharmacy_pairs):
+                actual_pair_id = pair_id + 1
+                our_block = pair.our
+                comp_block = pair.competitor
+
+                our_price = self._extract_price(row, our_block.price_col)
+                comp_price = self._extract_price(row, comp_block.price_col)
+
+                # наша аптека
+                if our_price is not None:
+                    result.append(
+                        NormalizedPriceDTO(
+                            import_id=import_id,
+                            city=structure.city,
+                            product_name=product_name,
+                            pharmacy_name=our_block.pharmacy_name,
+                            pharmacy_instance=our_block.pharmacy_instance,
+                            is_our=True,
+                            price=our_price,
+                            purchase_price=None,
+                            price_segment=current_segment,
+                            pair_id=actual_pair_id,
+                            competitor_name=comp_block.pharmacy_instance
+                        )
+                    )
+                
+                # конкурент
+                if comp_price is not None:
+                    result.append(
+                        NormalizedPriceDTO(
+                            import_id=import_id,
+                            city=structure.city,
+                            product_name=product_name,
+                            pharmacy_name=comp_block.pharmacy_name,
+                            pharmacy_instance=comp_block.pharmacy_instance,
+                            is_our=False,
+                            price=comp_price,
+                            purchase_price=None,
+                            price_segment=current_segment,
+                            pair_id=actual_pair_id,
+                            competitor_name=our_block.pharmacy_instance
+                        )
+                    )
+        
         return result
     
     def _preprocess(self, df: pd.DataFrame) -> pd.DataFrame:

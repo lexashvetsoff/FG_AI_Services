@@ -49,82 +49,339 @@ class PromptBuilder:
    - пересмотреть стратегию
    - обратить внимание на товары
 
+ФОРМАТИРОВАНИЕ:
+- НЕ используй LaTeX ($...$)
+- пиши обычный текст
+- вместо avg_diff_pct → "средняя разница (%)"
+
 Формат:
 - четко
 - по пунктам
 - с конкретными товарами и городами
 """
     
-    def build_summary(self, segment_reports: list) -> str:
+    def build_segment_prompt(self, context: dict) -> str:
         return f"""
 Ты аналитик фармацевтического ритейла.
 
-У тебя есть отчеты по сегментам:
+====================
+КОНТЕКСТ
+====================
 
-{json.dumps(segment_reports, ensure_ascii=False, indent=2)}
+Сегмент: {context["segment"]}
 
-Сделай общий вывод:
+ВАЖНО:
+- our_pharmacy — наша аптека (ФГ)
+- competitor_pharmacy — конкурент
+- сравнение идет ПАРАМИ (это ключевая логика)
 
-1. Какие города проблемные
-2. Общая стратегия цен
-3. Где теряем деньги
-4. 5 ключевых действий
+====================
+АГРЕГИРОВАННЫЕ ДАННЫЕ (ОСНОВА АНАЛИЗА)
+====================
+
+{json.dumps(context["pair_summary"], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
+
+====================
+ГОТОВЫЕ ИНСАЙТЫ
+====================
+
+{json.dumps(context["insights"], ensure_ascii=False, indent=2, cls=DecimalEncoder)}
+
+====================
+ЗАДАЧА
+====================
+
+Сделай структурированный отчет:
+
+1. Общая ситуация по сегменту
+2. Основные конкуренты (ТОЛЬКО из данных)
+3. Где мы проигрываем (overprice)
+4. Где мы выигрываем (underprice)
+5. Конкретные рекомендации по ценам
+
+ЗАПРЕЩЕНО:
+- выдумывать конкурентов
+- путать наши аптеки и конкурентов
+- делать выводы без данных
+
+ФОРМАТИРОВАНИЕ:
+- НЕ используй LaTeX ($...$)
+- пиши обычный текст
+- вместо avg_diff_pct → "средняя разница (%)"
+
+ПИШИ:
+- четко
+- по делу
+- с цифрами
 """
     
     def build_chat_prompt(self, question: str, context: dict) -> str:
         return f"""
 Ты аналитик фармацевтического ритейла.
 
-Отвечай строго на основе данных.
+====================
+ВАЖНО
+====================
 
-Если данных недостаточно — скажи об этом.
+- "ФГ" — наши аптеки
+- остальные — конкуренты
+- данные сгруппированы по сегментам
 
-=== ДАННЫЕ ===
+====================
+ДАННЫЕ
+====================
+
 {json.dumps(context, ensure_ascii=False, indent=2, cls=DecimalEncoder)}
 
-=== ВОПРОС ===
+====================
+ВОПРОС
+====================
+
 {question}
 
-=== ОТВЕТ ===
-Кратко, по делу, с конкретикой.
+====================
+ПРАВИЛА
+====================
+
+- отвечай только по данным
+- не выдумывай
+- если данных нет — скажи
+- используй конкретные цифры
+- отвечай коротко, 2-3 предложения
+
+====================
+ВАЖНО
+====================
+ФОРМАТИРОВАНИЕ:
+- НЕ используй LaTeX ($...$)
+- пиши обычный текст
+- вместо avg_diff_pct → "средняя разница (%)"
+
+Ответ:
 """
     
     def build_sql_propmt(self, question: str, import_id: str) -> str:
         return f"""
-Ты пишешь SQL для PostgreSQL.
+Ты senior SQL analyst.
+Пишешь SQL для PostgreSQL.
+
+========================================
+ГЛАВНЫЕ ПРАВИЛА
+========================================
+
+- Только SELECT
+- Никаких INSERT/UPDATE/DELETE
+- Всегда добавляй:
+
+WHERE import_id = '{import_id}'
+
+- Всегда LIMIT 50
+- Используй только существующие таблицы и поля
+- Не придумывай поля
+
+========================================
+БИЗНЕС-ЛОГИКА
+========================================
+
+НАШИ АПТЕКИ:
+- is_our = true
+- обычно начинаются с "ФГ"
+
+КОНКУРЕНТЫ:
+- is_our = false
 
 ВАЖНО:
-- ВСЕГДА фильтруй по import_id = '{import_id}'
+- product_name = название товара
+- pharmacy_name = название сети аптек
+- pharmacy_instance = название конкретной аптеки
+- НИКОГДА не сравнивай:
+    product_name = 'ФГ-...'
+- НИКОГДА не используй pharmacy_name и pharmacy_instance как товар
 
-ДОСТУПНЫЕ ТАБЛИЦЫ:
+========================================
+ТАБЛИЦЫ
+========================================
 
-normalized_prices(
-    import_id,
-    city, product_name, pharmacy_name,
-    price, is_our, price_segment
-)
+normalized_prices
+-----------------
+Сырые цены.
 
-city_metrics(
-    import_id,
-    city, price_segment, avg_price, avg_discount
-)
+Поля:
+- import_id
+- city → город
+- product_name → товар
+- pharmacy_name → сеть
+- pharmacy_instance → аптека
+- is_our → наша аптека или нет
+- price → цена
+- price_segment → ценовой сегмент
+- pair_id → ID пары "наша аптека ↔ конкурент"
+- competitor_name → прямой конкурент
 
-competitor_metrics(
-    import_id,
-    city, price_segment, pharmacy_name, price_index, category
-)
+Использовать:
+- поиск цен
+- список товаров
+- список аптек
 
-product_metrics(
-    import_id,
-    city, price_segment, product_name, avg_price, std_dev
-)
 
-ПРАВИЛА:
-- только SELECT
-- всегда LIMIT 50
-- обязательно WHERE import_id = '{import_id}'
+========================================
 
-ВОПРОС:
+pair_price_metrics
+------------------
+
+Главная таблица сравнения.
+
+1 строка = сравнение:
+НАША АПТЕКА ↔ КОНКУРЕНТ
+по конкретному товару.
+
+Поля:
+- import_id
+- city
+- product_name
+- price_segment
+- pair_id
+- our_pharmacy_name
+- our_pharmacy_instance
+- competitor_pharmacy_name
+- competitor_pharmacy_instance
+- our_price
+- competitor_price
+- diff_abs
+- diff_pct
+- status
+
+status:
+- cheaper
+- expensive
+- equal
+
+Использовать:
+- анализ завышения
+- анализ демпинга
+- сравнение сетей
+
+========================================
+
+competitor_metrics
+------------------
+
+Поля:
+- import_id
+- city
+- pharmacy_name
+- pharmacy_instance
+- price_segment
+- price_index
+- category
+
+category:
+- cheap
+- mid
+- expensive
+
+Использовать:
+- поиск дешевых сетей
+- поиск дорогих сетей
+- рейтинг конкурентов
+
+========================================
+
+city_metrics
+------------
+
+Поля:
+- import_id
+- city
+- price_segment
+- avg_price
+- price_dispersion
+- avg_discount
+
+Использовать:
+- сравнение городов
+- анализ скидок
+
+========================================
+
+product_metrics
+---------------
+
+Поля:
+- import_id
+- city
+- product_name
+- price_segment
+- avg_price
+- min_price
+- max_price
+- std_dev
+
+Использовать:
+- поиск аномалий
+- дорогие товары
+- нестабильные товары
+
+========================================
+ПРИМЕРЫ ПРАВИЛЬНЫХ ЗАПРОСОВ
+========================================
+
+Пример:
+Какие конкуренты самые дешевые?
+
+SELECT pharmacy_instance, price_index
+FROM competitor_metrics
+WHERE import_id = '{import_id}'
+ORDER BY price_index ASC
+LIMIT 20;
+
+----------------------------------------
+
+Пример:
+Какие товары у нас дороже конкурентов?
+
+SELECT
+    product_name,
+    our_price,
+    competitor_price,
+    diff_pct
+FROM pair_price_metrics
+WHERE import_id = '{import_id}'
+  AND diff_pct > 10
+ORDER BY diff_pct DESC
+LIMIT 50;
+
+----------------------------------------
+
+Пример:
+Почему цены ФГ- 86 и Дешевая аптека (ДА) почти одинаковые в сегменте 501-1000?
+
+SELECT
+	city,
+	our_pharmacy_instance,
+	competitor_pharmacy_instance,
+	product_name,
+	our_price,
+	competitor_price,
+	diff_abs,
+	diff_pct
+FROM pair_price_metrics
+WHERE import_id = '{import_id}'
+	AND price_segment = '501-1000'
+    AND (
+        -- Поиск записей, связанных с первой локацией ('ФГ- 86')
+        our_pharmacy_name LIKE '%ФГ- 86%' OR our_pharmacy_instance LIKE '%ФГ- 86%'
+    )
+    AND (
+        -- Поиск записей, связанных со второй локацией ('Дешевая аптека (ДА)')
+        competitor_pharmacy_name LIKE '%Дешевая аптека (ДА)%' OR competitor_pharmacy_instance LIKE '%Дешевая аптека (ДА)%'
+    )
+LIMIT 50
+
+========================================
+ВОПРОС
+========================================
+
 {question}
 
 Верни только SQL.
@@ -140,8 +397,53 @@ product_metrics(
 ДАННЫЕ:
 {data}
 
+ФОРМАТИРОВАНИЕ:
+- НЕ используй LaTeX ($...$)
+- пиши обычный текст
+- вместо avg_diff_pct → "средняя разница (%)"
+
 Объясни:
 - кратко
 - по делу
 - с выводами
+"""
+    
+    def build_over_prompt(self, question: str) -> str:
+        return f"""
+Ты аналитик фармацевтического ритейла.
+
+Проанализируй вопрос пользователя.
+
+ВОПРОС:
+{question}
+
+Если он не имеет отношения к аналитике фармацевтики - мягко скажи об этом и направь диалог в аналитическое русло.
+Иначе - задай уточняющие вопросы.
+
+ФОРМАТИРОВАНИЕ:
+- НЕ используй LaTeX ($...$)
+- пиши обычный текст
+
+Отвечай кратко и по делу
+"""
+
+    def build_summary(self, segment_reports: list):
+        return f"""
+Ты аналитик фармацевтического ритейла.
+
+У тебя есть отчеты по сегментам:
+
+{json.dumps(segment_reports, ensure_ascii=False, indent=2)}
+
+ФОРМАТИРОВАНИЕ:
+- НЕ используй LaTeX ($...$)
+- пиши обычный текст
+- вместо avg_diff_pct → "средняя разница (%)"
+
+Сделай общий вывод:
+
+1. Какие города проблемные
+2. Общая стратегия цен
+3. Где теряем деньги
+4. 5 ключевых действий
 """

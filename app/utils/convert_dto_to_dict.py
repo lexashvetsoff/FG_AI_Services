@@ -7,6 +7,7 @@ def dto_to_dict(dto: NormalizedPriceDTO):
         'city': dto.city,
         'product_name': dto.product_name,
         'pharmacy_name': dto.pharmacy_name,
+        'pharmacy_instance': dto.pharmacy_instance,
         'is_our': dto.is_our,
         'price': dto.price,
         'purchase_price': dto.purchase_price,

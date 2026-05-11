@@ -41,6 +41,7 @@ class ImportService:
             await self.price_repo.bulk_insert(all_rows)
 
             # 3. аналитика
+            await self.analytics.calculate_pair_metrics(import_obj.id)
             await self.analytics.calculate_product_metrics(import_obj.id)
             await self.analytics.calculate_competitor_metrics(import_obj.id)
             await self.analytics.calculate_city_metrics(import_obj.id)
@@ -61,8 +62,11 @@ class ImportService:
             'city': dto.city,
             'product_name': dto.product_name,
             'pharmacy_name': dto.pharmacy_name,
+            'pharmacy_instance': dto.pharmacy_instance,
             'is_our': dto.is_our,
             'price': dto.price,
             'purchase_price': dto.purchase_price,
-            'price_segment': dto.price_segment
+            'price_segment': dto.price_segment,
+            'pair_id': dto.pair_id,
+            'competitor_name': dto.competitor_name
         }
