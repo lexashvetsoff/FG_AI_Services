@@ -69,6 +69,41 @@ class ContextBuilder:
             'competitors': competitors[:20]
         }
     
+    async def build_chat_context(self, import_id: str, our_pharmacy: str, comp_pharmacy: str, segment: str):
+        query = """
+        SELECT
+            city,
+            product_name,
+            our_pharmacy_name,
+            our_pharmacy_instance,
+            competitor_pharmacy_name,
+            competitor_pharmacy_instance,
+            our_price,
+            competitor_price,
+            diff_abs,
+            diff_pct,
+            status
+        FROM pair_price_metrics
+        WHERE import_id = :import_id
+        AND price_segment = :segment
+        AND (
+            our_pharmacy_name LIKE '%' || :our_pharmacy || '%' OR our_pharmacy_instance LIKE '%' || :our_pharmacy || '%'
+        )
+        ORDER BY
+            product_name,
+            city
+        LIMIT 50;
+        """
+
+        params = {
+            'import_id': import_id,
+            'our_pharmacy': our_pharmacy,
+            'segment': segment
+        }
+
+        result = await self.session.execute(text(query), params)
+        return [dict(r._mapping) for r in result]
+    
     async def _get_pair_summary(self, import_id: str, segment: str = None):
         query = """
         SELECT

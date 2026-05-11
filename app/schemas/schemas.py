@@ -57,3 +57,15 @@ class TokenResponse(BaseModel):
 class ChatRequest(BaseModel):
     import_id: str
     question: str
+
+
+class ChatContextExtra(BaseModel):
+    our_pharmacy: str
+    competitor_pharmacy: str
+    segment: str
+
+
+class ChatRequestContext(BaseModel):
+    import_id: str
+    question: str
+    extra: ChatContextExtra

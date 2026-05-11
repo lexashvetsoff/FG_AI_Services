@@ -395,7 +395,7 @@ LIMIT 50
 {question}
 
 ДАННЫЕ:
-{data}
+{json.dumps(data, ensure_ascii=False, indent=2, cls=DecimalEncoder)}
 
 ФОРМАТИРОВАНИЕ:
 - НЕ используй LaTeX ($...$)

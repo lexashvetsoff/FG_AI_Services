@@ -6,6 +6,7 @@ from app.config import settings
 from app.utils.markdown import md_to_html
 from app.utils.sql_validator import validate_sql
 from app.utils.sql_guard import enforce_import_filter
+from app.schemas.schemas import ChatContextExtra
 from app.services.competitor_alnalysis.sql_executor import execute_sql
 from app.models.competitor_analysis import LLMReport
 from app.ai.competitor_alnalysis.llm import AnalystClient
@@ -129,7 +130,7 @@ class LLMService:
         await self.session.execute(stmt)
         await self.session.commit()
     
-    async def chat(self, import_id: str, question: str):
+    async def chat(self, import_id: str, question: str, extra: ChatContextExtra = None):
         # mode = self.router.detect_mode(question)
 
         # # 1. АНАЛИТИКА (основной режим)
@@ -150,16 +151,31 @@ class LLMService:
         # response = await self.answer_with_sql(import_id, question)
         # html_text = md_to_html(response)
         # return html_text
-        mode = self.router.detect_mode(question)
-        if mode == 'context':
-            prompt = self.prompt_builder.build_over_prompt(question)
+        if extra:
+            logging.info(f'Generate chat context')
+
+            context = await self.context_builder.build_chat_context(
+                import_id=import_id,
+                our_pharmacy=extra.our_pharmacy,
+                comp_pharmacy=extra.competitor_pharmacy,
+                segment=extra.segment
+            )
+            prompt = self.prompt_builder.build_answer_prompt(question, context)
             response = await self.client.generate(prompt)
             html_text = md_to_html(response)
             return html_text
-        if mode == 'sql':
-            response = await self.answer_with_sql(import_id, question)
-            html_text = md_to_html(response)
-            return html_text
+        
+        else:
+            mode = self.router.detect_mode(question)
+            if mode == 'context':
+                prompt = self.prompt_builder.build_over_prompt(question)
+                response = await self.client.generate(prompt)
+                html_text = md_to_html(response)
+                return html_text
+            if mode == 'sql':
+                response = await self.answer_with_sql(import_id, question)
+                html_text = md_to_html(response)
+                return html_text
     
     async def answer_question(self, import_id: str, question: str):
         context = await self.context_builder.build_chat(import_id)

@@ -7,7 +7,7 @@ from sqlalchemy import text, select
 from app.config import settings
 from app.services.competitor_alnalysis.llm_service import LLMService
 from app.api.dependencies import get_db, get_current_user
-from app.schemas.schemas import ChatRequest
+from app.schemas.schemas import ChatRequest, ChatRequestContext
 from app.core.templates import templates
 from app.models.competitor_analysis import LLMReport
 from app.models.user import User
@@ -51,6 +51,22 @@ async def chat(
     answer = await service.chat(
         import_id=request.import_id,
         question=request.question
+    )
+
+    return {'answer': answer}
+
+
+@router.post('/chat_context')
+async def chat_context(
+    request: ChatRequestContext,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    service = LLMService(db)
+    answer = await service.chat(
+        import_id=request.import_id,
+        question=request.question,
+        extra=request.extra
     )
 
     return {'answer': answer}

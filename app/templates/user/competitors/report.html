@@ -25,6 +25,18 @@
             font-size: 14px;
         }
 
+        .toolbar button {
+            padding: 8px;
+            font-size: 14px;
+            border-radius: 5px;
+            background: white;
+            border-width: 1px;
+        }
+
+        .toolbar button:hover {
+            background: lightblue;
+        }
+
         .container {
             padding: 20px;
         }
@@ -560,33 +572,88 @@
         });
     }
 
-    async function sendMessage() {
-        const input = document.getElementById("chatInput");
-        const text = input.value;
+    // async function sendMessage() {
+    //     const input = document.getElementById("chatInput");
+    //     const text = input.value;
 
-        if (!text) return;
+    //     if (!text) return;
 
-        addMessage(text, "user");
-        input.value = "";
+    //     addMessage(text, "user");
+    //     input.value = "";
 
+    //     showTypingIndicator();
+
+    //     const res = await fetch("/v1/chat", {
+    //         method: "POST",
+    //         headers: {"Content-Type": "application/json"},
+    //         body: JSON.stringify({
+    //             import_id: "{{ request.path_params.import_id }}",
+    //             question: text
+    //         })
+    //     });
+
+    //     const data = await res.json();
+
+    //     removeTypingIndicator();
+
+    //     addMessage(data.answer, "bot");
+
+    //     // input.value = "";
+    // }
+
+    // Универсальная отправка сообщения
+    async function sendChatMessage(question, extraPayload = {}) {
+        if (!question) return;
+
+        addMessage(question, "user");
         showTypingIndicator();
 
-        const res = await fetch("/v1/chat", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                import_id: "{{ request.path_params.import_id }}",
-                question: text
-            })
+
+        const payload = {
+            import_id: "{{ request.path_params.import_id }}",
+            question: question,
+            extra: extraPayload
+        };
+
+        console.log(payload)
+
+        // Если есть данные о паре — используем другой роут, иначе стандартный
+        const isDetailed = !!extraPayload.our_pharmacy;
+        const url = isDetailed ? "/v1/chat_context" : "/v1/chat";
+
+        try {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            removeTypingIndicator();
+            addMessage(data.answer, "bot");
+        } catch (error) {
+            removeTypingIndicator();
+            addMessage("⚠️ Ошибка при получении ответа", "bot");
+            console.error(error);
+        }
+    }
+
+    // Старый sendMessage (для ввода в поле)
+    async function sendMessage() {
+        const input = document.getElementById("chatInput");
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        await sendChatMessage(text);
+    }
+
+    // Новая функция для детального запроса
+    async function sendDetailedMessage(ourPharmacy, compPharmacy, segment, customQuestion = null) {
+        const question = customQuestion || `Анализ цен ${ourPharmacy} относительно конкурента в ценовом сегменте ${segment}`;
+        await sendChatMessage(question, {
+            our_pharmacy: ourPharmacy,
+            competitor_pharmacy: compPharmacy,
+            segment: segment
         });
-
-        const data = await res.json();
-
-        removeTypingIndicator();
-
-        addMessage(data.answer, "bot");
-
-        // input.value = "";
     }
 
     function addMessage(text, type) {
@@ -752,23 +819,32 @@
                 //         `почти одинаковые в сегменте ${currentSegment}?`;
                 // }
 
-                question = `Анализ цен ${our} относительно конкурента в ценовом сегменте ${currentSegment}`;
+                // question = `Анализ цен ${our} относительно конкурента в ценовом сегменте ${currentSegment}`;
 
                 // console.log(question);
-                openChat(question);
+                // openChat(question);
+
+                openDetailedChat(our, comp, currentSegment)
             };
         });
     }
 
-    /* Открытие чата */
-    function openChat(question) {
+    /* Открытие чата с детальным сравнением */
+    function openDetailedChat(our, comp, segment) {
         const panel = document.getElementById("chat-panel");
         panel.classList.add("open");
-
-        document.getElementById("chatInput").value = question;
-
-        sendMessage();
+        sendDetailedMessage(our, comp, segment);
     }
+
+    /* Открытие чата */
+    // function openChat(question) {
+    //     const panel = document.getElementById("chat-panel");
+    //     panel.classList.add("open");
+
+    //     document.getElementById("chatInput").value = question;
+
+    //     sendMessage();
+    // }
 
     /* График */
     async function loadChart(importId, segment) {
@@ -831,9 +907,11 @@
 
         document.getElementById("currentSegment").innerText = segment;
 
-        console.log("initDashboard")
-        console.log("import_id =", importId);
-        console.log("segment =", segment);
+        document.getElementById("drilldown").innerHTML = "";
+
+        // console.log("initDashboard")
+        // console.log("import_id =", importId);
+        // console.log("segment =", segment);
 
         loadHeatmap(importId, segment);
         loadChart(importId, segment);
@@ -841,9 +919,10 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         // import_id: "{{ request.path_params.import_id }}",
-        console.log("DOMContentLoaded")
-        console.log("import_id =", "{{ request.path_params.import_id }}");
-        console.log("segment =", "{{ segment }}");
+        // console.log("DOMContentLoaded")
+        // console.log("import_id =", "{{ request.path_params.import_id }}");
+        // console.log("segment =", "{{ segment }}");
+
         initDashboard("{{ request.path_params.import_id }}", "{{ segment }}");
     });
 
