@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime
+from fastapi import BackgroundTasks
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,8 +9,10 @@ from app.utils.markdown import md_to_html
 from app.utils.sql_validator import validate_sql
 from app.utils.sql_guard import enforce_import_filter
 from app.schemas.schemas import ChatContextExtra
+from app.db.session import AsyncSessionLocal
 from app.services.competitor_alnalysis.sql_executor import execute_sql
-from app.models.competitor_analysis import LLMReport
+from app.models.competitor_analysis import LLMReport, ImportReport
+from app.utils.competitor_analysis_utils import ReportGenerationStatus
 from app.ai.competitor_alnalysis.llm import AnalystClient
 from app.services.competitor_alnalysis.prompt_builder import PromptBuilder
 from app.services.competitor_alnalysis.context_builder import ContextBuilder
@@ -81,7 +85,7 @@ class LLMService:
                     'html': html_text
                 })
 
-                await self._save(import_id, response, 'report_segment', segment)
+                await self._save(import_id, response, 'report_segment', segment, session=session)
 
         # Отсортируем по ценовым сегментам
         order_map = {seg: idx for idx, seg in enumerate(ETALON_SORTING_REPORTS)}
@@ -108,7 +112,7 @@ class LLMService:
                 'html': md_to_html(report_in_db.content)
             }
         else:
-            logging.info(f'(generate_summary_report) НЕ нашли в базе отчеты по import_id: {import_id} - генерируем')
+            logging.info(f'(generate_summary_report) НЕ нашли в базе отчет по import_id: {import_id} - генерируем')
             prompt = self.prompt_builder.build_summary(segment_reports)
             response = await self.client.generate(prompt)
             html_text = md_to_html(response)
@@ -116,10 +120,12 @@ class LLMService:
                 'report': response,
                 'html': html_text
             }
-            await self._save(import_id, response, 'summary', None)
+            await self._save(import_id, response, 'summary', None, session=session)
         return report
     
-    async def _save(self, import_id: str, content: str, report_type: str = 'summary', price_segment: str = None):
+    async def _save(self, import_id: str, content: str, report_type: str = 'summary', price_segment: str = None, session: AsyncSession = None):
+        """Сохраняет отчёт в БД, используя переданную сессию или self.session по умолчанию."""
+        sess = session or self.session
         stmt = insert(LLMReport).values(
             import_id=import_id,
             report_type=report_type,
@@ -127,8 +133,93 @@ class LLMService:
             price_segment=price_segment
         )
 
-        await self.session.execute(stmt)
+        # await self.session.execute(stmt)
+        # await self.session.commit()
+        await sess.execute(stmt)
+        await sess.commit()
+    
+    async def get_report_generation_status(self, import_id: str) -> dict:
+        """Возвращает статус генерации отчётов для данного import_id."""
+        result = await self.session.execute(
+            select(ImportReport).where(ImportReport.import_id == import_id)
+        )
+        record = result.scalar_one_or_none()
+        if not record:
+            return {'status': 'pending', 'error': None}
+        return {'status': record.status.value, 'error': record.error_message}
+    
+    async def create_report_generation_record(self, import_id: str) -> ImportReport:
+        """Создаёт запись о генерации отчёта со статусом pending."""
+        record = ImportReport(
+            import_id=import_id,
+            status=ReportGenerationStatus.pending
+        )
+        self.session.add(record)
         await self.session.commit()
+        await self.session.refresh(record)
+        return record
+    
+    async def start_background_generation(self, import_id: str, background_tasks: BackgroundTasks):
+        """Запускает фоновую генерацию отчётов, если их ещё нет или статус pending."""
+        # Проверяем существующую запись
+        result = await self.session.execute(
+            select(ImportReport).where(ImportReport.import_id == import_id)
+        )
+        record = result.scalar_one_or_none()
+        if record:
+            if record.status in (ReportGenerationStatus.ready, ReportGenerationStatus.processing):
+                # уже готово или генерируется – ничего не делаем
+                return
+            # если failed – можно перезапустить, обновим статус
+            record.status = ReportGenerationStatus.pending
+            record.error_message = None
+            await self.session.commit()
+        else:
+            record = await self.create_report_generation_record(import_id)
+        
+        # Запускаем фоновую задачу (не дожидаемся)
+        background_tasks.add_task(self._generate_reports_task, import_id)
+    
+    async def _generate_reports_task(self, import_id: str):
+        """Фоновая задача: генерирует отчёты по сегментам и summary, обновляет статус."""
+        # Используем отдельную сессию
+        async with AsyncSessionLocal() as db:
+            try:
+                # Обновляем статус на processing
+                await self._update_report_status(db, import_id, ReportGenerationStatus.processing, started=True)
+
+                reports = await self.generate_reports(db, import_id)
+                summary = await self.generate_summary_report(db, import_id, reports)
+
+                # Все успешно – ставим ready
+                await self._update_report_status(db, import_id, ReportGenerationStatus.ready, completed=True)
+            except Exception as e:
+                logging.error(f"Ошибка генерации отчёта для {import_id}: {e}", exc_info=True)
+                await self._update_report_status(db, import_id, ReportGenerationStatus.failed, error=str(e))
+    
+    async def _update_report_status(
+            self,
+            db: AsyncSession,
+            import_id: str,
+            status: ReportGenerationStatus,
+            started: bool = False,
+            completed: bool = False,
+            error: str = None
+    ):
+        """Вспомогательный метод для обновления статуса в таблице import_reports."""
+        result = await db.execute(select(ImportReport).where(ImportReport.import_id == import_id))
+        record = result.scalar_one_or_none()
+        if not record:
+            record = ImportReport(import_id=import_id)
+            db.add(record)
+        record.status = status
+        if started:
+            record.started_at = datetime.now()
+        if completed:
+            record.comleted_at = datetime.now()
+        if error:
+            record.error_message = error
+        await db.commit()
     
     async def chat(self, import_id: str, question: str, extra: ChatContextExtra = None):
         # mode = self.router.detect_mode(question)

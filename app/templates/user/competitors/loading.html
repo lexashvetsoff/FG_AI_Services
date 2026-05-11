@@ -1,0 +1,54 @@
+{% extends "user/base.html" %}
+{% block content %}
+
+<div style="text-align: center; margin-top: 50px;">
+    <h2>Генерация аналитического отчёта</h2>
+    <div class="loader"></div>
+    <p id="status-message">Пожалуйста, подождите. Процесс может занять до 25 минут.</p>
+    <p id="timer">Прошло времени: 0 секунд</p>
+</div>
+
+<style>
+.loader {
+    border: 8px solid #f3f3f3;
+    border-top: 8px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+<script>
+    const import_id = "{{ import_id }}";
+    let startTime = Date.now();
+    let timerInterval = setInterval(() => {
+        let elapsed = Math.floor((Date.now() - startTime) / 1000);
+        let minutes = Math.floor(elapsed / 60);
+        let seconds = elapsed % 60;
+        // document.getElementById('timer').innerText = `Прошло времени: ${elapsed} секунд`;
+        document.getElementById('timer').innerText = `Прошло времени: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
+
+    async function checkStatus() {
+        const res = await fetch(`/v1/${import_id}/report/status`);
+        const data = await res.json();
+        if (data.status === 'ready') {
+            clearInterval(timerInterval);
+            window.location.href = `/v1/${import_id}/report`;
+        } else if (data.status === 'failed') {
+            clearInterval(timerInterval);
+            document.getElementById('status-message').innerHTML = `Ошибка генерации отчёта: ${data.error || 'Неизвестная ошибка'}`;
+            document.querySelector('.loader').style.display = 'none';
+        }
+    }
+
+    setInterval(checkStatus, 3000);
+</script>
+
+{% endblock %}

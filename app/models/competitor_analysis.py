@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.utils.competitor_analysis_utils import SourceType, ImportStatus
+from app.utils.competitor_analysis_utils import SourceType, ImportStatus, ReportGenerationStatus
 
 
 class Import(Base):
@@ -34,6 +34,23 @@ class Import(Base):
     # relationships
     raw_data: Mapped[List['RawData']] = relationship(back_populates='import_obj')
     prices: Mapped[List['NormalizedPrice']] = relationship(back_populates='import_obj')
+    report_generation: Mapped['ImportReport'] = relationship(back_populates='import_obj')
+
+
+class ImportReport(Base):
+    __tablename__ = 'import_reports'
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    import_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('imports.id'))
+    status: Mapped[ReportGenerationStatus] = mapped_column(
+        Enum(ReportGenerationStatus),
+        nullable=False,
+        default=ReportGenerationStatus.pending
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    comleted_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    import_obj: Mapped['Import'] = relationship(back_populates='report_generation')
 
 
 class RawData(Base):

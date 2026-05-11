@@ -12,3 +12,10 @@ class ImportStatus(str, enum.Enum):
     processing = 'processing'
     done = 'done'
     error = 'error'
+
+
+class ReportGenerationStatus(enum.Enum):
+    pending = 'pending'      # ещё не начата
+    processing = 'processing' # в процессе
+    ready = 'ready'           # отчёты готовы
+    failed = 'failed'         # ошибка

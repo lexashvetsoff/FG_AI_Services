@@ -1,0 +1,10 @@
+{% extends "user/base.html" %}
+{% block content %}
+
+<div style="text-align: center; margin-top: 50px;">
+    <h2>Ошибка генерации отчёта</h2>
+    <p>{{ error }}</p>
+    <a href="/v1/imports">Вернуться к списку импортов</a>
+</div>
+
+{% endblock %}
