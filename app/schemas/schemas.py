@@ -14,7 +14,7 @@ class PharmaSpecs(BaseModel):
 
 class MatchRequest(BaseModel):
     internal_name: str = Field(..., min_length=3, max_length=300)
-    competitor_names: List[str] = Field(..., min_length=2, max_length=20)
+    competitor_names: List[str] = Field(..., min_length=1, max_length=40)
     internal_id: Optional[str] = Field(None, max_length=100)
     request_id: Optional[str] = Field(default_factory=lambda: f'req_{uuid.uuid4().hex[:8]}')
     category: Optional[str] = Field(None, max_length=100)
