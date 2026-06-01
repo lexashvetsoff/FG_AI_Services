@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     OLLAMA_TIMEOUT: int = 30
     THRESHOLD_HIGH: float = 0.82
     THRESHOLD_LOW: float = 0.60
+    THRESHOLD_INGREDIENTS_MATCH: float = 0.60
     CACHE_TTL: int = 7200
     LOG_LEVEL: str = "INFO"
     JWT_SECRET: str
