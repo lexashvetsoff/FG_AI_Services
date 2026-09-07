@@ -69,3 +69,26 @@ class ChatRequestContext(BaseModel):
     import_id: str
     question: str
     extra: ChatContextExtra
+
+
+class ExtractData(BaseModel):
+    name: str = Field(default="", description="Торговое наименование продукта")
+    brand: str = Field(default="", description="Бренд продукта")
+    type: List[str] = Field(default_factory=list, description="Тип продукта")
+    taste: List[str] = Field(default_factory=list, description="Вкус")
+    color: List[str] = Field(default_factory=list, description="Цвет")
+    aroma: List[str] = Field(default_factory=list, description="Аромат")
+    effect: List[str] = Field(default_factory=list, description="Эффекты")
+    result: List[str] = Field(default_factory=list, description="Результаты")
+    component: List[str] = Field(default_factory=list, description="Компоненты/Состав")
+    hardness: List[str] = Field(default_factory=list, description="Жесткость")
+    feature: List[str] = Field(default_factory=list, description="Особенности")
+
+
+class ExtractRequest(BaseModel):
+     text: str = Field(..., description="Сырой текст для извлечения данных")
+
+
+class ExtractResponse(BaseModel):
+    status: str
+    data: ExtractData

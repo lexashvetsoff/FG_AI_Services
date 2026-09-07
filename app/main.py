@@ -10,12 +10,14 @@ from app.ai.matcher.embeddings import EmbeddingModel
 from app.ai.matcher.llm import LLMVerifier
 from app.services.cache import TTLCache
 from app.services.matcher import MatcherService
+from app.services.property_extractor import ExtractService
 from app.api.v1.matcher import router as matcher_router
 from app.api.v1.competitor_analysis import router as analysis_router
 from app.auth.router import router as auth_router
 from app.ui.router import router as ui_router
 from app.admin.router import router as admin_router
 from app.user.router import router as user_router
+from app.api.v1.property_extractor import router as extract_router
 
 
 def setup_logging():
@@ -40,6 +42,8 @@ async def lifespan(app: FastAPI):
     cache = TTLCache(settings.CACHE_TTL)
     service = MatcherService(embedder, llm, cache)
     app.state.matcher_service = service
+    extract_service = ExtractService()
+    app.state.extract_service = extract_service
     logging.info("✅ Models loaded. Service ready.")
 
     yield
@@ -68,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(user_router)
+    app.include_router(extract_router)
     return app
 
 

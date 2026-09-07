@@ -17,6 +17,10 @@ client.pull('gemma4:26b')
 # curl http://10.10.22.203:11434/api/tags   - какие модели доступны
 
 
+# curl http://10.10.11.17:11434    - запущен ли сервер с llm
+# curl http://10.10.11.17:11434/api/tags   - какие модели доступны
+
+
 # embeddings
 # PARSER_EMBED_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 # PARSER_EMBED_MODEL=sergeyzh/LaBSE-ru-sts
