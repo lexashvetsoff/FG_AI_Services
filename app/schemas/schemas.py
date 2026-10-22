@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -92,3 +92,79 @@ class ExtractRequest(BaseModel):
 class ExtractResponse(BaseModel):
     status: str
     data: ExtractData
+
+
+class CategorySchema(BaseModel):
+    """Описание одной категории и её свойств"""
+    name: str = Field(..., description="Название категории")
+    properties: List[str] = Field(..., description="Список свойств для извлечения")
+
+
+class TextItem(BaseModel):
+    """Единица текста с идентификатором"""
+    id: str = Field(..., description="Уникальный идентификатор текста (например, SKU или UUID)")
+    text: str = Field(..., description="Сырой текст (описание, наименование) для анализа")
+
+
+class ClassifyAndExtractRequest(BaseModel):
+    """Тело запроса: список текстов с ID и общие категории"""
+    items: List[TextItem] = Field(
+        ..., 
+        description="Список текстов с идентификаторами для анализа",
+        min_length=1
+    )
+    categories: List[CategorySchema] = Field(..., description="Список возможных категорий с их свойствами")
+
+
+class ExtractedProperty(BaseModel):
+    """Одно извлеченное свойство"""
+    property_name: str = Field(..., description="Название свойства")
+    value: Union[str, int, float, List[str]] = Field(..., description="Извлеченное значение")
+
+
+class SingleTextResult(BaseModel):
+    """Результат обработки одного текста"""
+    id: str = Field(..., description="Идентификатор исходного текста (из запроса)")
+    category: Optional[str] = Field(None, description="Найденная категория. Null, если не найдено.")
+    confidence: Optional[float] = Field(None, description="Уверенность модели (0.0 - 1.0)")
+    extracted_properties: List[ExtractedProperty] = Field(default_factory=list, description="Список извлеченных свойств")
+    error: Optional[str] = Field(None, description="Текст ошибки, если для этого конкретного текста не удалось получить результат")
+
+
+class ClassifyAndExtractResponse(BaseModel):
+    """Итоговое тело ответа API"""
+    status: str = Field(default="success", description="Общий статус выполнения")
+    results: List[SingleTextResult] = Field(..., description="Список результатов для каждого переданного текста")
+
+
+class ProductItem(BaseModel):
+    code: Union[int, str] = Field(..., description="Код товара")
+    text: str = Field(..., description="Наименование товара")
+
+
+class AllowedValue(BaseModel):
+    code: str = Field(..., description="Код значения")
+    values: List[str] = Field(..., description="Список вариантов наименования значения")
+
+
+class ClassificationDimension(BaseModel):
+    id: str = Field(..., description="ID свойства")
+    name: str = Field(..., description="Наименование свойства")
+    allowed_values: List[AllowedValue] = Field(..., description="Массив допустимых значений с кодами")
+
+
+class ClassifyRequest(BaseModel):
+    products: List[ProductItem] = Field(..., min_length=1)
+    dimensions: List[ClassificationDimension] = Field(..., min_length=1)
+
+
+class ProductClassification(BaseModel):
+    code: Union[int, str] = Field(..., description="Код товара из запроса")
+    reasoning: Optional[str] = Field(None, description="Рассуждение модели: расшифровка аббревиатур и логика выбора кодов")
+    # Ключ - id измерения, значение - code значения из справочника (или null)
+    classifications: Dict[str, Optional[str]] = Field(..., description="Результаты классификации")
+
+
+class ClassifyResponse(BaseModel):
+    status: str = 'success'
+    results: List[ProductClassification]

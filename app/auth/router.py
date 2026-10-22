@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.config import settings
 from app.schemas.schemas import TokenRequest, TokenResponse
 from app.auth.jwt_handler import create_access_token
+from app.auth.dependencies import get_current_client
 
 
 router = APIRouter(prefix='/v1/auth', tags=['Authentication'])
@@ -20,3 +21,10 @@ async def issue_token(request: TokenRequest):
         access_token=create_access_token(request.client_id),
         expire_in=settings.JWT_EXPIRE_MINUTES * 60
     )
+
+
+@router.get('/test_token')
+async def test_token(
+    _: str = Depends(get_current_client)
+):
+    return {'status': 'ok'}

@@ -11,6 +11,8 @@ from app.ai.matcher.llm import LLMVerifier
 from app.services.cache import TTLCache
 from app.services.matcher import MatcherService
 from app.services.property_extractor import ExtractService
+from app.services.property_extractor import ClassExtractService
+from app.services.property_extractor import ClassifyerService
 from app.api.v1.matcher import router as matcher_router
 from app.api.v1.competitor_analysis import router as analysis_router
 from app.auth.router import router as auth_router
@@ -39,11 +41,20 @@ async def lifespan(app: FastAPI):
     
     embedder = EmbeddingModel(settings.PARSER_EMBED_MODEL)
     llm = LLMVerifier()
+
     cache = TTLCache(settings.CACHE_TTL)
     service = MatcherService(embedder, llm, cache)
     app.state.matcher_service = service
+
     extract_service = ExtractService()
     app.state.extract_service = extract_service
+
+    class_extract_service = ClassExtractService()
+    app.state.class_extract_service = class_extract_service
+
+    classifyer_service = ClassifyerService()
+    app.state.classifyer_service = classifyer_service
+    
     logging.info("✅ Models loaded. Service ready.")
 
     yield

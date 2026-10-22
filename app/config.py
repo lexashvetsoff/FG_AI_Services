@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     ANALYST_LLM_MODEL: str = 'gemma4:e4b'
     ANALYST_OLLAMA_HOST: str = 'http://10.10.22.201:11434'
     OLLAMA_TIMEOUT: int = 30
+    OLLAMA_CONCURRENCY_LIMIT: int = 3
     THRESHOLD_HIGH: float = 0.82
     THRESHOLD_LOW: float = 0.60
     THRESHOLD_INGREDIENTS_MATCH: float = 0.60
