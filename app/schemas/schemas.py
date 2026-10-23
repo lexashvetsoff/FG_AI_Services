@@ -172,3 +172,29 @@ class ProductClassification(BaseModel):
 class ClassifyResponse(BaseModel):
     status: str = 'success'
     results: List[ProductClassification]
+
+
+class MNNProductItem(BaseModel):
+    code: str = Field(..., description="Код")
+    text: str = Field(..., description="Текстовое наименование для классификации")
+
+
+class MNNDictionaryItem(BaseModel):
+    code: str = Field(..., description="Код МННН")
+    value: str = Field(..., description="Нименование МНН")
+
+
+class MNNClassifyRequest(BaseModel):
+    products: List[MNNProductItem] = Field(..., min_length=1)
+    dictionary: List[MNNDictionaryItem] = Field(..., min_length=1)
+
+
+class MNNClassifyResult(BaseModel):
+    code: str = Field(..., description="Код из запроса")
+    mnn_code: Optional[str] = Field(None, description="Код МНН из справочника")
+    reasoning: Optional[str] = Field(None, description="Рассуждения модели")
+
+
+class MNNClassifyResponse(BaseModel):
+    status: str = "success"
+    results: List[MNNClassifyResult]

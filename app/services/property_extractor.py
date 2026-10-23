@@ -1,13 +1,19 @@
 import logging
 
 from app.config import settings
-from app.ai.property_extractor.llm import LLMExtractor, LLMClassExtractor, LLMClassifier
+from app.ai.property_extractor.llm import (
+    LLMExtractor, 
+    LLMClassExtractor, 
+    LLMClassifier,
+    LLMClassifierMNN
+)
 from app.schemas.schemas import (
     ExtractData, 
     ExtractRequest,
     ClassifyAndExtractRequest,
     ClassifyAndExtractResponse,
-    ClassifyRequest
+    ClassifyRequest,
+    MNNClassifyRequest
 )
 
 
@@ -35,4 +41,12 @@ class ClassifyerService:
         self.classifyer = LLMClassifier()
 
     async def process(self, request: ClassifyRequest):
+        return await self.classifyer.process(request)
+
+
+class ClassifyerMNNService:
+    def __init__(self):
+        self.classifyer = LLMClassifierMNN()
+
+    async def process(self, request: MNNClassifyRequest):
         return await self.classifyer.process(request)

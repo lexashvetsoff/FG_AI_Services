@@ -2,6 +2,7 @@ import json
 import ollama
 import logging
 import asyncio
+from rapidfuzz import fuzz, process
 from typing import List, Union, Dict, Optional, Set
 from app.config import settings
 from app.schemas.schemas import (
@@ -17,7 +18,12 @@ from app.schemas.schemas import (
     ProductClassification,
     ClassificationDimension,
     AllowedValue,
-    ProductItem
+    ProductItem,
+    MNNProductItem,
+    MNNDictionaryItem,
+    MNNClassifyResult,
+    MNNClassifyRequest,
+    MNNClassifyResponse
 )
 
 
@@ -203,6 +209,109 @@ class LLMClassifier:
             results = await asyncio.gather(*tasks)
     
             return ClassifyResponse(results=list(results))
+
+
+class LLMClassifierMNN:
+    _SYSTEM_PROMPT = """Ты — строгий фармацевтический алгоритм. 
+Твоя задача — извлечь из текста товара МНН (международные непатентованные наименования) и расшифровать все медицинские аббревиатуры.
+
+ПРАВИЛА:
+1. Расшифровывай сокращения (например: "Ацетилсалиц.к-та" -> "Ацетилсалициловая кислота", "аскорб.к-та" -> "Аскорбиновая кислота", "р-р" игнорируй, это форма выпуска).
+2. Если в тексте несколько действующих веществ, перечисли их все.
+3. Если МНН не найдено, верни пустой список.
+4. Верни ТОЛЬКО валидный JSON.
+
+ФОРМАТ ОТВЕТА:
+{
+  "extracted_mnn": ["Название вещества 1", "Название вещества 2"],
+  "reasoning": "Краткое пояснение: какие слова нашел и как расшифровал."
+}
+"""
+    def __init__(self):
+        self._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
+        self._semaphore = asyncio.Semaphore(settings.OLLAMA_CONCURRENCY_LIMIT)
+
+    def find_best_mnn_match(self, extracted_mnn: List[str], dictionary: List[MNNDictionaryItem]) -> Optional[str]:
+        """Ищет наилучшее совпадение извлеченных МНН в справочнике"""
+        if not extracted_mnn:
+            return None
+
+        # Нормализуем извлеченные МНН (lowercase, strip)
+        normalized_extracted = [mnn.lower().strip() for mnn in extracted_mnn]
+        
+        # Если одно МНН - ищем точное совпадение через RapidFuzz
+        if len(normalized_extracted) == 1:
+            query = normalized_extracted[0]
+            dict_choices = [item.value.lower() for item in dictionary]
+            
+            best_match = process.extractOne(
+                query, 
+                dict_choices, 
+                scorer=fuzz.token_set_ratio,
+                score_cutoff=80  # Высокий порог для точности
+            )
+            
+            if best_match:
+                _, score, index = best_match
+                logger.info(f"Single MNN match: '{query}' -> '{dictionary[index].value}' (Score: {score})")
+                return dictionary[index].code
+            return None
+        
+        # Если несколько МНН - ищем запись, содержащую ВСЕ из них
+        logger.info(f"Searching for combination: {normalized_extracted}")
+        
+        for item in dictionary:
+            dict_value = item.value.lower()
+            
+            # Проверяем, все ли извлеченные МНН содержатся в этой записи
+            all_contained = all(extracted in dict_value for extracted in normalized_extracted)
+            
+            if all_contained:
+                logger.info(f"Found combination match: '{item.value}'")
+                return item.code
+        
+        # Если не нашли запись со всеми МНН - возвращаем null
+        logger.warning(f"No combination found for: {normalized_extracted}")
+        return None
+
+    async def process_single_mnn(self, product: MNNProductItem, dictionary: List[MNNDictionaryItem]) -> MNNClassifyResult:
+        try:
+            # ШАГ 1: Запрос к LLM на извлечение (без справочника!)
+            messages = [
+                {'role': 'system', 'content': self._SYSTEM_PROMPT},
+                {'role': 'user', 'content': product.text}
+            ]
+            response = await self._client.chat(
+                model=settings.PARSER_LLM_MODEL,
+                messages=messages,
+                format='json',
+                options={'temperature': 0.0, 'num_ctx': 2048}
+            )
+            raw_json = response['message']['content']
+            logger.info(raw_json)
+            parsed_data = json.loads(raw_json)
+
+            extracted_mnn = parsed_data.get('extracted_mnn', [])
+            reasoning = parsed_data.get('reasoning', '')
+
+            # ШАГ 2: Матчинг в Python (предположительно должен занимать < 10 миллисекунд на 2800 записей)
+            matched_code = self.find_best_mnn_match(extracted_mnn, dictionary)
+
+            return MNNClassifyResult(
+                code=product.code,
+                mnn_code=matched_code,
+                reasoning=reasoning
+            )
+
+        except Exception as e:
+            logger.error(f"Error processing MNN for {product.code}: {e}")
+        return MNNClassifyResult(code=product.code, mnn_code=None, reasoning=f"Error: {str(e)}")
+
+    async def process(self, request: MNNClassifyRequest) -> MNNClassifyResponse:
+        """Классифицирует МНН товаров, используя LLM для извлечения и Python для поиска в огромном справочнике."""
+        tasks = [self.process_single_mnn(product, request.dictionary) for product in request.products]
+        results = await asyncio.gather(*tasks)
+        return MNNClassifyResponse(results=list(results))
 
 
 class LLMClassExtractor:
