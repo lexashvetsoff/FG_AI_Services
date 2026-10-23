@@ -36,12 +36,23 @@ class LLMClassifier:
             vals = []
             for v in dim.allowed_values:
                 vals.append(f"{v.code}=[{', '.join(v.values)}]")
-            dims_desc.append(f"{dim.name} ({dim.id}): {', '.join(vals)}")
+            
+            format_hint = "верни МАССИВ кодов (даже если один)" if dim.is_multi_value else "верни ОДИН код (строку) или null"
+            dims_desc.append(f"{dim.name} ({dim.id}): {', '.join(vals)}. Формат: {format_hint}")
         
         dims_str = "\n".join(dims_desc)
         
         return f"""Ты — строгий алгоритм классификации фармацевтических товаров.
-    Расшифровывай медицинские аббревиатуры (таб.=таблетки, вн=энтеральный/внутрь, д/ин=парентеральное/инъекции, наруж=наружное, назал=назальный и т.д.).
+
+ПРАВИЛА РАСШИФРОВКИ АББРЕВИАТУР:
+- таб. = таблетки
+- р-р = раствор (жидкая форма)
+- вн = внутрь / перорально / энтеральный (НЕ внутривенно!)
+- в/в = внутривенно / парентеральное
+- д/ин = для инъекций / парентеральное
+- д/инг = для ингаляций / ингаляционное
+- наруж = наружное
+- назал = назальный (в нос)
 
 СПРАВОЧНИКИ:
 {dims_str}
@@ -50,19 +61,22 @@ class LLMClassifier:
 Код: {product.code}
 Текст: {product.text}
 
-ЗАДАЧА:
-1. СНАЧАЛА напиши краткое рассуждение в поле "reasoning": какие слова/аббревиатуры ты нашла и как их расшифровала.
-2. ЗАТЕМ определи значения для каждого измерения.
-3. Если расшифрованное слово ЕСТЬ в справочнике — верни его КОД.
-4. Если слова НЕТ в справочнике (например, "назал", а в справочнике нет назального) — верни СТРОГО null. Не подбирай похожие значения!
+КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА:
+1. СНАЧАЛА напиши рассуждение в поле "reasoning": какие слова нашел и как их расшифровал.
+2. ЗАТЕМ проверь: есть ли расшифрованное слово в справочнике?
+3. ЕСЛИ СЛОВА НЕТ В СПРАВОЧНИКЕ — верни СТРОГО null (или пустой массив []).
+   ПРИМЕР ПЛОХОЙ ЛОГИКИ: "раствор не найден в справочнике, но подойдет код таблеток" — ТАК ДЕЛАТЬ НЕЛЬЗЯ!
+   ПРИМЕР ХОРОШЕЙ ЛОГИКИ: "раствор не найден в справочнике форм, возвращаю null".
+4. НЕ ПЫТАЙСЯ подобрать похожие значения! Если слова нет — только null.
+5. "вн" = ЭНТЕРАЛЬНЫЙ (внутрь), а НЕ внутривенно!
 
 ФОРМАТ ОТВЕТА (СТРОГО JSON-ОБЪЕКТ):
 {{
   "code": {product.code},
-  "reasoning": "Найдены слова: 'таб.' (таблетки), 'вн' (внутрь/энтеральный). 'Таблетки' есть в справочнике форм (код 000000001). 'Энтеральный' есть в справочнике способов (код 000000001).",
+  "reasoning": "Найдены слова: 'р-р' (раствор), 'вн' (внутрь/энтеральный), 'д/инг' (ингаляции). Раствор не найден в справочнике форм -> null. Энтеральный есть (код 000000001). Ингаляционное есть (код 000000003).",
   "classifications": {{
-    "{dimensions[0].id}": "код_или_null",
-    "{dimensions[1].id}": "код_или_null"
+    "{dimensions[0].id}": null,
+    "{dimensions[1].id}": ["000000001", "000000003"]
   }}
 }}
 """
@@ -70,6 +84,7 @@ class LLMClassifier:
     def clean_and_validate_classifications(
         self,
         raw_classifications: dict, 
+        reasoning: str,
         dimensions: List[ClassificationDimension]
     ) -> Dict[str, Optional[str]]:
         """Очищает ответ от мусора (строк 'null') и жестко валидирует коды."""
@@ -81,20 +96,49 @@ class LLMClassifier:
             for dim in dimensions
         }
         
+        # Нормализуем reasoning для поиска
+        reasoning_lower = reasoning.lower() if reasoning else ""
+        
         for dim in dimensions:
             returned_value = raw_classifications.get(dim.id)
             
-            # 1. Очистка от строкового "null" или "None"
-            if isinstance(returned_value, str) and returned_value.lower() in ['null', 'none', '']:
-                returned_value = None
+            # Собираем валидные коды
+            found_codes = []
+            
+            if isinstance(returned_value, list):
+                for item in returned_value:
+                    if isinstance(item, str) and item.lower() not in ['null', 'none', '']:
+                        if item in valid_codes_map[dim.id]:
+                            found_codes.append(item)
+            elif isinstance(returned_value, str):
+                if returned_value.lower() not in ['null', 'none', '']:
+                    if returned_value in valid_codes_map[dim.id]:
+                        found_codes.append(returned_value)
+                        
+            # КЛЮЧЕВАЯ ПРОВЕРКА: если в reasoning написано "не найден" или "нет в справочнике",
+            # но модель вернула код — принудительно заменяем на null
+            if found_codes:
+                # Ищем паттерны, указывающие на отсутствие значения
+                not_found_patterns = [
+                    f"{dim.name.lower()} не найден",
+                    f"{dim.name.lower()} нет в справочнике",
+                    f"нет точного совпадения",
+                    "не найдено в справочнике",
+                    "нет подходящего"
+                ]
                 
-            # 2. Жесткая проверка кода
-            if returned_value in valid_codes_map[dim.id]:
-                validated[dim.id] = returned_value
+                for pattern in not_found_patterns:
+                    if pattern in reasoning_lower:
+                        # Модель сама написала, что не нашла, но вернула код — это галлюцинация
+                        found_codes = []
+                        break
+            
+            # Формируем итоговое значение
+            if dim.is_multi_value:
+                validated[dim.id] = found_codes 
             else:
-                # Если это не валидный код и не None, принудительно ставим None
-                validated[dim.id] = None
-                
+                validated[dim.id] = found_codes[0] if found_codes else None
+
         return validated
 
     async def process_single_product(self, product: ProductItem, dimensions: List[ClassificationDimension]) -> dict:
@@ -111,16 +155,18 @@ class LLMClassifier:
                 )
                 
                 raw_json = response['message']['content']
-                logger.debug(f"Raw JSON for {product.code}: {raw_json}")
-                
+                logger.info(raw_json)
                 parsed_data = json.loads(raw_json)
                 
-                # Достаем рассуждения (если модель их вернула)
                 reasoning = parsed_data.get('reasoning')
                 raw_classifications = parsed_data.get('classifications', {})
                 
-                # Жесткая валидация кодов
-                final_classifications = self.clean_and_validate_classifications(raw_classifications, dimensions)
+                # Передаем reasoning для проверки логики
+                final_classifications = self.clean_and_validate_classifications(
+                    raw_classifications, 
+                    reasoning,
+                    dimensions
+                )
                 
                 return {
                     "code": product.code,
@@ -128,19 +174,12 @@ class LLMClassifier:
                     "classifications": final_classifications
                 }
 
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON Decode Error for {product.code}: {e}")
-                return {
-                    "code": product.code, 
-                    "reasoning": f"Ошибка парсинга JSON: {e}",
-                    "classifications": {dim.id: None for dim in dimensions}
-                }
             except Exception as e:
                 logger.error(f"Error processing {product.code}: {e}")
                 return {
                     "code": product.code, 
                     "reasoning": f"Ошибка обработки: {e}",
-                    "classifications": {dim.id: None for dim in dimensions}
+                    "classifications": {dim.id: [] if dim.is_multi_value else None for dim in dimensions}
                 }
 
     async def process(self, request: ClassifyRequest):

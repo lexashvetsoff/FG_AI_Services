@@ -1,6 +1,6 @@
 import uuid
-from typing import Optional, List, Dict, Union
 from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, List, Dict, Union, Any
 
 
 class PharmaSpecs(BaseModel):
@@ -150,6 +150,10 @@ class AllowedValue(BaseModel):
 class ClassificationDimension(BaseModel):
     id: str = Field(..., description="ID свойства")
     name: str = Field(..., description="Наименование свойства")
+    is_multi_value: bool = Field(
+        default=False, 
+        description="Может ли измерение иметь несколько значений (True - всегда возвращать список, False - строку или null)"
+    )
     allowed_values: List[AllowedValue] = Field(..., description="Массив допустимых значений с кодами")
 
 
@@ -161,8 +165,8 @@ class ClassifyRequest(BaseModel):
 class ProductClassification(BaseModel):
     code: Union[int, str] = Field(..., description="Код товара из запроса")
     reasoning: Optional[str] = Field(None, description="Рассуждение модели: расшифровка аббревиатур и логика выбора кодов")
-    # Ключ - id измерения, значение - code значения из справочника (или null)
-    classifications: Dict[str, Optional[str]] = Field(..., description="Результаты классификации")
+    # Значение может быть строкой, списком строк или null
+    classifications: Dict[str, Any] = Field(..., description="Результаты классификации")
 
 
 class ClassifyResponse(BaseModel):
