@@ -1,3 +1,4 @@
+import re
 import json
 import ollama
 import logging
@@ -23,7 +24,10 @@ from app.schemas.schemas import (
     MNNDictionaryItem,
     MNNClassifyResult,
     MNNClassifyRequest,
-    MNNClassifyResponse
+    MNNClassifyResponse,
+    DosageCleanRequest,
+    DosageCleanResponse,
+    DosageItem
 )
 
 
@@ -206,10 +210,270 @@ class LLMClassifier:
                 }
 
     async def process(self, request: ClassifyRequest):
-            tasks = [self.process_single_product(product, request.dimensions) for product in request.products]
-            results = await asyncio.gather(*tasks)
-    
-            return ClassifyResponse(results=list(results))
+        tasks = [self.process_single_product(product, request.dimensions) for product in request.products]
+        results = await asyncio.gather(*tasks)
+
+        return ClassifyResponse(results=list(results))
+
+
+class LLMClassifyreDoza:
+    def __init__(self):
+        self._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
+        self._semaphore = asyncio.Semaphore(settings.OLLAMA_CONCURRENCY_LIMIT)
+
+    def normalize_text(self, text: str) -> str:
+        text = text.strip().lower()
+        text = text.replace(',', '.') # Стандартизация десятичных разделителей
+        text = re.sub(r'\s+', ' ', text) # Убираем множественные пробелы
+        return text
+
+    def classify_by_regex(self, text: str) -> Optional[str]:
+        """Возвращает название группы, если строка подходит под паттерн, иначе None."""
+        t = text.lower()
+        
+        # 1. Комбинированная (содержит '+')
+        if '+' in t:
+            return "Комбинированная дозировка"
+        
+        # 2. Международные единицы
+        if re.search(r'(ме|ед\.|международных|анти-ха)', t):
+            return "Международные единицы (МЕ)"
+        
+        # 3. Дозировка на дозу/впрыск
+        if re.search(r'/доз', t):
+            return "Дозировка на дозу/впрыск"
+        
+        # 4. Процентный раствор
+        if '%' in t:
+            return "Процентный раствор (%)"
+        
+        # 5. Концентрация (мг/мл, г/л и т.д.)
+        if re.search(r'(мг|мкг|г)\s*/\s*(мл|л)', t):
+            return "Концентрация (мг/мл, г/л)"
+        
+        # 6. Чистый объем
+        if re.match(r'^\d+(\.\d+)?\s*(мл|л)$', t):
+            return "Объем (мл, л)"
+        
+        # 7. Чистая масса
+        if re.match(r'^\d+(\.\d+)?\s*(мг|г|мкг)$', t):
+            return "Масса (мг, г, мкг)"
+        
+        # Если ничего не подошло, отдаем на суд LLM
+        return None
+
+    def build_prompt(self, chunk: List[str]) -> str:
+        items_str = "\n".join([f"- \"{item}\"" for item in chunk])
+        return f"""Ты — строгий эксперт по нормализации фармацевтических данных.
+Тебе дан список строк, которые не удалось классифицировать простыми правилами.
+Твоя задача: определить, является ли строка дозировкой, и если да, то к какой группе она относится.
+
+ДОПУСТИМЫЕ ГРУППЫ (выбери строго одну):
+1. "Масса (мг, г, мкг)" - например: "1.45г", "225мг", "1г N5" (N5 - упаковка, 1г - масса)
+2. "Объем (мл, л)" - например: "2500 мл"
+3. "Концентрация (мг/мл, г/л)" - например: "100мг/мл", "100мг/5мл-20.925г"
+4. "Процентный раствор (%)" - например: "1.5%", "2%-120мл"
+5. "Комбинированная дозировка" - несколько активных веществ
+6. "Дозировка на дозу/впрыск" - например: "0.255мг/доза", "35мкг/доза"
+7. "Международные единицы (МЕ)" - например: "10000МЕ", "3млн.МЕ"
+8. "Мусор / Не дозировка" - например: "ампулы 10 шт", "4.0", "0,65", "104 30гр" (если похоже на ошибку OCR)
+
+Верни ТОЛЬКО валидный JSON-массив объектов:
+[
+  {{
+    "text": "исходная строка",
+    "group": "Название группы из списка выше",
+    "is_garbage": true/false,
+    "comment": "Краткое пояснение (1-2 слова)"
+  }}
+]
+
+Список для анализа:
+{items_str}
+"""
+
+    def normalize_dosage_response(self, parsed_data: any) -> list:
+        """
+        Универсальная нормализация ответа LLM к формату списка словарей.
+        Обрабатывает все капризы локальных моделей:
+        - Сразу список
+        - Объект с ключом items/results/data
+        - Словарь, где ключи - это тексты
+        """
+        # 1. Если это уже список - отлично
+        if isinstance(parsed_data, list):
+            return parsed_data
+            
+        elif isinstance(parsed_data, dict):
+            # 2. Ищем стандартные ключи-обертки
+            for key in ['items', 'results', 'data', 'dosages', 'products']:
+                if key in parsed_data and isinstance(parsed_data[key], list):
+                    logger.info(f"Found wrapper key: '{key}'")
+                    return parsed_data[key]
+                    
+            # 3. Универсальный поиск: ищем любой ключ, значением которого является список словарей
+            for key, value in parsed_data.items():
+                if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
+                    logger.info(f"Found list in key: '{key}'")
+                    return value
+                    
+            # 4. Модель вернула словарь, где ключи - это сами тексты
+            # Например: {"100мг/5мл": {"group": "...", ...}, "20 млрд.": {...}}
+            normalized = []
+            for text_key, item_data in parsed_data.items():
+                if isinstance(item_data, dict):
+                    # Если внутри нет поля text, добавляем его из ключа
+                    if 'text' not in item_data:
+                        item_data = {**item_data, 'text': text_key}
+                    normalized.append(item_data)
+            if normalized:
+                return normalized
+                
+            logger.error(f"Could not normalize dict: {list(parsed_data.keys())}")
+            return []
+            
+        else:
+            logger.error(f"Unexpected parsed_data type: {type(parsed_data)}")
+            return []
+
+    async def process_llm_chunk(self, chunk: List[str]) -> List[dict]:
+        try:
+            prompt = self.build_prompt(chunk)
+
+            response = await self._client.chat(
+                model=settings.PARSER_LLM_MODEL,
+                messages=[{'role': 'user', 'content': prompt}],
+                format='json',
+                options={'temperature': 0.0, 'num_ctx': 4096}
+            )
+            raw_json = response['message']['content']
+            # logger.info(raw_json)
+            parsed_data = json.loads(raw_json)
+
+            normalized_items = self.normalize_dosage_response(parsed_data)
+        
+            if not normalized_items:
+                logger.warning("Normalization returned empty list, returning fallback")
+                return [
+                    {"text": item, "group": "Требует ручной проверки", "is_garbage": False, "comment": "Не удалось распарсить ответ LLM"} 
+                    for item in chunk
+                ]
+            
+            # Теперь normalized_items - гарантированно список словарей
+            # Дополнительно убеждаемся, что у каждого элемента есть обязательные поля
+            validated_items = []
+            for item in normalized_items:
+                if isinstance(item, dict) and 'text' in item:
+                    # Убеждаемся, что все поля на месте (страховка от галлюцинаций модели)
+                    item.setdefault('group', 'Не определено')
+                    item.setdefault('is_garbage', False)
+                    item.setdefault('comment', '')
+                    validated_items.append(item)
+            
+            return validated_items
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON Decode Error: {e}")
+            return [
+                {"text": item, "group": "Требует ручной проверки", "is_garbage": False, "comment": f"JSON error: {e}"} 
+                for item in chunk
+            ]
+        except Exception as e:
+            logger.error(f"LLM Error: {e}")
+            return [
+                {"text": item, "group": "Требует ручной проверки", "is_garbage": False, "comment": str(e)} 
+                for item in chunk
+            ]
+
+    async def process(self, request: DosageCleanRequest):
+        results = []
+        groups_summary = {}
+        garbage_count = 0
+        llm_chunk = []
+
+        # 1. Первичная обработка Regex
+        for dosage in request.dosages:
+            norm_text = self.normalize_text(dosage)
+            group = self.classify_by_regex(norm_text)
+            
+            if group:
+                # Успешно классифицировано Python
+                is_garbage = False
+                comment = "Классифицировано Regex"
+            else:
+                # Сложный случай, отправляем в батч для LLM
+                llm_chunk.append(norm_text)
+                continue # Обработаем ниже
+                
+            # results.append({
+            #     "original_text": dosage,
+            #     "normalized_text": norm_text,
+            #     "group": group,
+            #     "is_garbage": is_garbage,
+            #     "comment": comment
+            # })
+
+            results.append(
+                DosageItem(
+                    original_text=dosage,
+                    normalized_text=norm_text,
+                    group=group,
+                    is_garbage=is_garbage,
+                    comment=comment
+                )
+            )
+            groups_summary[group] = groups_summary.get(group, 0) + 1
+
+        # 2. Обработка сложных случаев через LLM (батчами по 30 штук)
+        if llm_chunk:
+            batch_size = 30
+            batches = [llm_chunk[i:i + batch_size] for i in range(0, len(llm_chunk), batch_size)]
+            
+            tasks = [self.process_llm_chunk(batch) for batch in batches]
+            llm_responses = await asyncio.gather(*tasks)
+            
+            # Собираем результаты LLM
+            # Создаем маппинг для быстрого поиска, так как порядок может быть важен
+            llm_results_map = {}
+            for batch_res in llm_responses:
+                for item in batch_res:
+                    llm_results_map[item['text']] = item
+                    
+            for dosage in request.dosages:
+                norm_text = self.normalize_text(dosage)
+                if norm_text in llm_results_map:
+                    llm_data = llm_results_map[norm_text]
+                    is_garbage = llm_data.get('is_garbage', False)
+                    group = llm_data.get('group', 'Не определено')
+                    
+                    # results.append({
+                    #     "original_text": dosage,
+                    #     "normalized_text": norm_text,
+                    #     "group": group,
+                    #     "is_garbage": is_garbage,
+                    #     "comment": llm_data.get('comment', '')
+                    # })
+
+                    results.append(
+                        DosageItem(
+                            original_text=dosage,
+                            normalized_text=norm_text,
+                            group=group,
+                            is_garbage=is_garbage,
+                            comment=llm_data.get('comment', '')
+                        )
+                    )
+                    
+                    if is_garbage:
+                        garbage_count += 1
+                    groups_summary[group] = groups_summary.get(group, 0) + 1
+
+        return DosageCleanResponse(
+            total_items=len(request.dosages),
+            garbage_count=garbage_count,
+            groups_summary=groups_summary,
+            results=results
+        )
 
 
 class LLMClassifierMNN:

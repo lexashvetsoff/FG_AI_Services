@@ -4,7 +4,8 @@ from app.services.property_extractor import (
     ExtractService,
     ClassExtractService,
     ClassifyerService,
-    ClassifyerMNNService
+    ClassifyerMNNService,
+    ClassifyerDozaService
 )
 from app.schemas.schemas import (
     ExtractRequest,
@@ -14,7 +15,9 @@ from app.schemas.schemas import (
     ClassifyRequest,
     ClassifyResponse,
     MNNClassifyRequest,
-    MNNClassifyResponse
+    MNNClassifyResponse,
+    DosageCleanRequest,
+    DosageCleanResponse
 )
 
 
@@ -35,6 +38,9 @@ async def get_classifyer_service(request: Request) -> ClassifyerService:
 
 async def get_classifyer_mnn_service(request: Request) -> ClassifyerMNNService:
     return request.app.state.classifyer_mnn_service
+
+async def get_classifyer_doza_service(request: Request) -> ClassifyerDozaService:
+    return request.app.state.classifyer_doza_service
 
 
 @router.post('/extract', response_model=ExtractResponse)
@@ -91,6 +97,18 @@ async def mnn_classifyer(
     if not request.dictionary:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Dictionary cannot be empty')
 
+    try:
+        return await service.process(request)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Extract failed: {e}')
+
+
+@router.post('/doza_classifyer', response_model=DosageCleanResponse)
+async def doza_classifyer(
+    request: DosageCleanRequest,
+    service: ClassifyerDozaService = Depends(get_classifyer_doza_service),
+    client: str = Depends(get_current_client)
+):
     try:
         return await service.process(request)
     except Exception as e:

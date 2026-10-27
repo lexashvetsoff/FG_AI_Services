@@ -14,6 +14,7 @@ from app.services.property_extractor import ExtractService
 from app.services.property_extractor import ClassExtractService
 from app.services.property_extractor import ClassifyerService
 from app.services.property_extractor import ClassifyerMNNService
+from app.services.property_extractor import ClassifyerDozaService
 from app.api.v1.matcher import router as matcher_router
 from app.api.v1.competitor_analysis import router as analysis_router
 from app.auth.router import router as auth_router
@@ -58,6 +59,9 @@ async def lifespan(app: FastAPI):
 
     classifyer_mnn_service = ClassifyerMNNService()
     app.state.classifyer_mnn_service = classifyer_mnn_service
+
+    classifyer_doza_service = ClassifyerDozaService()
+    app.state.classifyer_doza_service = classifyer_doza_service
 
     logging.info("✅ Models loaded. Service ready.")
 

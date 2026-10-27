@@ -198,3 +198,23 @@ class MNNClassifyResult(BaseModel):
 class MNNClassifyResponse(BaseModel):
     status: str = "success"
     results: List[MNNClassifyResult]
+
+
+class DosageItem(BaseModel):
+    original_text: str
+    normalized_text: str
+    group: str
+    is_garbage: bool = False
+    comment: Optional[str] = None
+
+
+class DosageCleanRequest(BaseModel):
+    dosages: List[str] = Field(..., min_length=1)
+
+
+class DosageCleanResponse(BaseModel):
+    status: str = "success"
+    total_items: int
+    garbage_count: int
+    groups_summary: dict
+    results: List[DosageItem]

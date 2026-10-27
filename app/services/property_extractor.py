@@ -5,7 +5,8 @@ from app.ai.property_extractor.llm import (
     LLMExtractor, 
     LLMClassExtractor, 
     LLMClassifier,
-    LLMClassifierMNN
+    LLMClassifierMNN,
+    LLMClassifyreDoza
 )
 from app.schemas.schemas import (
     ExtractData, 
@@ -13,7 +14,9 @@ from app.schemas.schemas import (
     ClassifyAndExtractRequest,
     ClassifyAndExtractResponse,
     ClassifyRequest,
-    MNNClassifyRequest
+    MNNClassifyRequest,
+    DosageCleanRequest,
+    DosageCleanResponse
 )
 
 
@@ -49,4 +52,12 @@ class ClassifyerMNNService:
         self.classifyer = LLMClassifierMNN()
 
     async def process(self, request: MNNClassifyRequest):
+        return await self.classifyer.process(request)
+
+
+class ClassifyerDozaService:
+    def __init__(self):
+        self.classifyer = LLMClassifyreDoza()
+
+    async def process(self, request: DosageCleanRequest):
         return await self.classifyer.process(request)
