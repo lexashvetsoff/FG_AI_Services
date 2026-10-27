@@ -387,7 +387,7 @@ class LLMClassifyreDoza:
 
     async def process(self, request: DosageCleanRequest):
         results = []
-        groups_summary = {}
+        # groups_summary = {}
         garbage_count = 0
         llm_chunk = []
 
@@ -422,7 +422,7 @@ class LLMClassifyreDoza:
                     comment=comment
                 )
             )
-            groups_summary[group] = groups_summary.get(group, 0) + 1
+            # groups_summary[group] = groups_summary.get(group, 0) + 1
 
         # 2. Обработка сложных случаев через LLM (батчами по 30 штук)
         if llm_chunk:
@@ -466,12 +466,12 @@ class LLMClassifyreDoza:
                     
                     if is_garbage:
                         garbage_count += 1
-                    groups_summary[group] = groups_summary.get(group, 0) + 1
+                    # groups_summary[group] = groups_summary.get(group, 0) + 1
 
         return DosageCleanResponse(
             total_items=len(request.dosages),
             garbage_count=garbage_count,
-            groups_summary=groups_summary,
+            # groups_summary=groups_summary,
             results=results
         )
 

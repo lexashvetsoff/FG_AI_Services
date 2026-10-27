@@ -216,5 +216,5 @@ class DosageCleanResponse(BaseModel):
     status: str = "success"
     total_items: int
     garbage_count: int
-    groups_summary: dict
+    # groups_summary: dict
     results: List[DosageItem]
