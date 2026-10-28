@@ -32,12 +32,45 @@ from app.schemas.schemas import (
 
 
 CHUNK_SIZE = 10
+DIM_DOS = 'dim_doz'
 logger = logging.getLogger(__name__)
 
 
 class LLMClassifier:
+    _DOSAGE_EXTRACTION_PROMPT = """Ты — строгий фармацевтический алгоритм.
+Твоя задача — извлечь из текста товара ДОЗИРОВКУ (количество активного вещества и/или объем).
+
+ПРАВИЛА:
+1. Ищи ЛЮБОЕ упоминание массы, объема или концентрации:
+   - Простая масса: "250мг", "500мг", "1г", "0.5г"
+   - Простой объем: "100мл", "5мл", "1л"
+   - Концентрация: "7.5мг/мл", "1%", "0.05%"
+   - Сложные паттерны: "7.5мг/мл-100мл", "100мг/5мл-20.925г", "120мг(70мг/мл)-1.7мл"
+   - Комбинированные: "5мг+8мг+20мг", "2мг+0.035мг"
+   - На дозу/впрыск: "0.255мг/доза", "35мкг/доза-15мл"
+   - Международные единицы: "10000МЕ", "3млн.МЕ"
+2. Извлекай дозировку ЦЕЛИКОМ, как она написана в тексте (включая дефисы, скобки, плюсы).
+3. ИГНОРИРУЙ количество в упаковке (N20, N10, №10, №30 и т.д.) — это НЕ дозировка.
+4. Если в тексте НЕСКОЛЬКО дозировок (например, "5мг/мл-100мл"), верни их все через запятую.
+5. Если дозировка не найдена, верни пустую строку.
+6. Верни ТОЛЬКО валидный JSON.
+
+ПРИМЕРЫ:
+- "Амоксициллин (таб. 250мг N20 вн )" → "250мг"
+- "Лазолван (р-р 7.5мг/мл-100мл фл. вн, д/инг )" → "7.5мг/мл-100мл"
+- "Баралгин М (р-р 0.5г/мл-5мл N5 амп. д/ин )" → "0.5г/мл-5мл"
+- "Африн (спрей 0.05%-15мл фл. назал )" → "0.05%-15мл"
+- "Тербинафин-Вертекс (крем 1%-15г наруж )" → "1%-15г"
+
+ФОРМАТ ОТВЕТА:
+{
+  "extracted_dosage": "извлеченная дозировка или пустая строка",
+  "reasoning": "Краткое пояснение: что нашел и как извлек."
+}
+"""
+
     def __init__(self):
-        self._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
+        self._client = ollama.AsyncClient(host=settings.ANALYST_OLLAMA_HOST)
         self._semaphore = asyncio.Semaphore(settings.OLLAMA_CONCURRENCY_LIMIT)
 
     def build_prompt(self, product: ProductItem, dimensions: List[ClassificationDimension]) -> str:
@@ -168,32 +201,107 @@ class LLMClassifier:
 
         return validated
 
-    async def process_single_product(self, product: ProductItem, dimensions: List[ClassificationDimension]) -> dict:
+    def find_best_dosage_match(self, extracted_dosage: str, dimension: ClassificationDimension):
+        """Ищет наилучшее совпадение извлеченной дозировки в справочнике."""
+        if not extracted_dosage:
+            return None
+
+        query = extracted_dosage.lower().strip()
+        dict_choices = [item.values[0].lower() for item in dimension.allowed_values]
+
+        # Используем token_set_ratio для устойчивости к пробелам и порядку
+        best_match = process.extractOne(
+            query,
+            dict_choices,
+            scorer=fuzz.token_set_ratio,
+            score_cutoff=85 # Высокий порог для точности
+        )
+
+        if best_match:
+            matched_text, score, index = best_match
+            logger.info(f"Dosage match: '{query}' -> '{matched_text}' (Score: {score})")
+            return dimension.allowed_values[index].code
+
+        return None
+
+    async def process_single_dosage(self, product: ProductItem, dimensions: List[ClassificationDimension]):
+        # ШАГ 1: Запрос к LLM на извлечение
+        messages = [
+            {'role': 'system', 'content': self._DOSAGE_EXTRACTION_PROMPT},
+            {'role': 'user', 'content': product.text}
+        ]
+
+        response = await self._client.chat(
+            model=settings.ANALYST_LLM_MODEL,
+            messages=messages,
+            format='json',
+            options={'temperature': 0.0, 'num_ctx': 8192}
+        )
+
+        raw_json = response['message']['content']
+        logger.info(raw_json)
+        parsed_data = json.loads(raw_json)
+
+        extracted_dosage = parsed_data.get('extracted_dosage', '')
+        reasoning = parsed_data.get('reasoning', '')
+
+        # ШАГ 2: Матчинг
+        matched_code = self.find_best_dosage_match(extracted_dosage, dimensions)
+        return {
+            'code': product.code,
+            'dosage': matched_code,
+            'reasoning': reasoning
+        }
+
+    async def process_single_product(self, product: ProductItem, dimensions: List[ClassificationDimension], is_request_doza: bool) -> dict:
         """Обрабатывает ОДИН товар через Ollama."""
+        # Если есть дозировки в запросе - обработаем их отдельно
+        only_doza = False
+        if is_request_doza:
+            if len(dimensions) == 1:
+                only_doza = True
+            dimension_doza = [dimensions.pop(dimensions.index(dimension)) for dimension in dimensions if dimension.id == DIM_DOS]
+        
         async with self._semaphore:
-            prompt = self.build_prompt(product, dimensions)
-            
             try:
-                response = await self._client.chat(
-                    model=settings.PARSER_LLM_MODEL,
-                    messages=[{'role': 'user', 'content': prompt}],
-                    format='json',
-                    options={'temperature': 0.1, 'num_ctx': 80000}
-                )
-                
-                raw_json = response['message']['content']
-                logger.info(raw_json)
-                parsed_data = json.loads(raw_json)
-                
-                reasoning = parsed_data.get('reasoning')
-                raw_classifications = parsed_data.get('classifications', {})
-                
-                # Передаем reasoning для проверки логики
-                final_classifications = self.clean_and_validate_classifications(
-                    raw_classifications, 
-                    reasoning,
-                    dimensions
-                )
+                if not only_doza:
+                    prompt = self.build_prompt(product, dimensions)
+
+                    response = await self._client.chat(
+                        model=settings.ANALYST_LLM_MODEL,
+                        messages=[{'role': 'user', 'content': prompt}],
+                        format='json',
+                        options={'temperature': 0.1, 'num_ctx': 80000}
+                    )
+                    
+                    raw_json = response['message']['content']
+                    logger.info(raw_json)
+                    parsed_data = json.loads(raw_json)
+                    
+                    reasoning = parsed_data.get('reasoning')
+                    raw_classifications = parsed_data.get('classifications', {})
+                    
+                    # Передаем reasoning для проверки логики
+                    final_classifications = self.clean_and_validate_classifications(
+                        raw_classifications, 
+                        reasoning,
+                        dimensions
+                    )
+
+                if is_request_doza:
+                    doza_classification = await self.process_single_dosage(product, dimension_doza[0])
+
+                    if only_doza:
+                        return{
+                            "code": product.code,
+                            "reasoning": doza_classification['reasoning'],
+                            "classifications": {
+                                DIM_DOS: doza_classification['dosage']
+                            } 
+                        }
+
+                reasoning = f'{reasoning} {doza_classification['reasoning']}'
+                final_classifications[DIM_DOS] = doza_classification['dosage']
                 
                 return {
                     "code": product.code,
@@ -210,7 +318,15 @@ class LLMClassifier:
                 }
 
     async def process(self, request: ClassifyRequest):
-        tasks = [self.process_single_product(product, request.dimensions) for product in request.products]
+        # Проверим есть запрос классификации дозировок в запросе
+        is_request_doza = False
+        dimensions = request.dimensions
+        for dimension in dimensions:
+            if dimension.id == DIM_DOS:
+                is_request_doza = True
+        logger.info(f'Request dosage: {is_request_doza}')
+
+        tasks = [self.process_single_product(product, request.dimensions, is_request_doza) for product in request.products]
         results = await asyncio.gather(*tasks)
 
         return ClassifyResponse(results=list(results))
@@ -218,7 +334,7 @@ class LLMClassifier:
 
 class LLMClassifyreDoza:
     def __init__(self):
-        self._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
+        self._client = ollama.AsyncClient(host=settings.ANALYST_OLLAMA_HOST)
         self._semaphore = asyncio.Semaphore(settings.OLLAMA_CONCURRENCY_LIMIT)
 
     def normalize_text(self, text: str) -> str:
@@ -341,7 +457,7 @@ class LLMClassifyreDoza:
             prompt = self.build_prompt(chunk)
 
             response = await self._client.chat(
-                model=settings.PARSER_LLM_MODEL,
+                model=settings.ANALYST_LLM_MODEL,
                 messages=[{'role': 'user', 'content': prompt}],
                 format='json',
                 options={'temperature': 0.0, 'num_ctx': 4096}
@@ -493,7 +609,7 @@ class LLMClassifierMNN:
 }
 """
     def __init__(self):
-        self._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
+        self._client = ollama.AsyncClient(host=settings.ANALYST_OLLAMA_HOST)
         self._semaphore = asyncio.Semaphore(settings.OLLAMA_CONCURRENCY_LIMIT)
 
     def find_best_mnn_match(self, extracted_mnn: List[str], dictionary: List[MNNDictionaryItem]) -> Optional[str]:
@@ -547,7 +663,7 @@ class LLMClassifierMNN:
                 {'role': 'user', 'content': product.text}
             ]
             response = await self._client.chat(
-                model=settings.PARSER_LLM_MODEL,
+                model=settings.ANALYST_LLM_MODEL,
                 messages=messages,
                 format='json',
                 options={'temperature': 0.0, 'num_ctx': 2048}
@@ -581,7 +697,7 @@ class LLMClassifierMNN:
 
 class LLMClassExtractor:
     def __init__(self):
-        self._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
+        self._client = ollama.AsyncClient(host=settings.ANALYST_OLLAMA_HOST)
         self._semaphore = asyncio.Semaphore(settings.OLLAMA_CONCURRENCY_LIMIT)
 
     def build_system_prompt(self, categories: List[CategorySchema]) -> str:
@@ -624,7 +740,7 @@ class LLMClassExtractor:
                 ]
 
                 response = await self._client.chat(
-                    model=settings.PARSER_LLM_MODEL,
+                    model=settings.ANALYST_LLM_MODEL,
                     messages=messages,
                     format='json',
                     options={'temperature': 0.1, 'num_ctx': 8192}
@@ -683,7 +799,7 @@ class LLMExtractor:
     """
     
     def __init__(self):
-        self._client = ollama.AsyncClient(host=settings.PARSER_OLLAMA_HOST)
+        self._client = ollama.AsyncClient(host=settings.ANALYST_OLLAMA_HOST)
 
     async def extract(self, request: ExtractRequest) -> ExtractData | None:
         messages = [
@@ -693,7 +809,7 @@ class LLMExtractor:
 
         try:
             response = await self._client.chat(
-                model=settings.PARSER_LLM_MODEL,
+                model=settings.ANALYST_LLM_MODEL,
                 messages=messages,
                 format='json',
                 options={'temperature': 0.1, 'num_ctx': 8192}

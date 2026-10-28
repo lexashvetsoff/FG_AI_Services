@@ -148,6 +148,12 @@ class AllowedValue(BaseModel):
 
 
 class ClassificationDimension(BaseModel):
+    """
+    Зафиксируем id:
+    dim_form - формы выпуска
+    dim_method - способы применения
+    dim_doz - дозировки
+    """
     id: str = Field(..., description="ID свойства")
     name: str = Field(..., description="Наименование свойства")
     is_multi_value: bool = Field(
