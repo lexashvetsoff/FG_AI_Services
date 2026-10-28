@@ -253,8 +253,10 @@ class LLMClassifier:
             'reasoning': reasoning
         }
 
-    async def process_single_product(self, product: ProductItem, dimensions: List[ClassificationDimension], is_request_doza: bool) -> dict:
+    async def process_single_product(self, product: ProductItem, _dimensions: List[ClassificationDimension], is_request_doza: bool) -> dict:
         """Обрабатывает ОДИН товар через Ollama."""
+        dimensions = list(_dimensions)
+        
         # Если есть дозировки в запросе - обработаем их отдельно
         only_doza = False
         if is_request_doza:
