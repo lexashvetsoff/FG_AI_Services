@@ -178,7 +178,7 @@ class LLMClassifier:
                     model=settings.PARSER_LLM_MODEL,
                     messages=[{'role': 'user', 'content': prompt}],
                     format='json',
-                    options={'temperature': 0.1, 'num_ctx': 8192}
+                    options={'temperature': 0.1, 'num_ctx': 80000}
                 )
                 
                 raw_json = response['message']['content']
