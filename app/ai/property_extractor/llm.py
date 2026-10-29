@@ -201,6 +201,28 @@ class LLMClassifier:
 
         return validated
 
+    def normalize_dosage_string(self, text: str) -> str:
+        """
+        Агрессивная нормализация строки дозировки.
+        Убирает всё, что не влияет на смысл дозировки.
+        """
+        if not text:
+            return ""
+        
+        # 1. Приводим к нижнему регистру
+        text = text.lower().strip()
+        
+        # 2. Унифицируем десятичные разделители
+        text = text.replace(',', '.')
+        
+        # 3. Убираем ВСЕ пробелы (в дозировках они не важны)
+        text = re.sub(r'\s+', '', text)
+        
+        # 4. Убираем невидимые символы
+        text = re.sub(r'[\u200b\u00a0]', '', text)
+        
+        return text
+
     def find_best_dosage_match(self, extracted_dosage: str, dimension: ClassificationDimension):
         """Ищет наилучшее совпадение извлеченной дозировки в справочнике."""
         if not extracted_dosage:
@@ -209,11 +231,11 @@ class LLMClassifier:
         query = extracted_dosage.lower().strip()
         dict_choices = [item.values[0].lower() for item in dimension.allowed_values]
 
-        # Используем token_set_ratio для устойчивости к пробелам и порядку
+        # Используем ratio для более строгого поиска
         best_match = process.extractOne(
             query,
             dict_choices,
-            scorer=fuzz.token_set_ratio,
+            scorer=fuzz.ratio,
             score_cutoff=85 # Высокий порог для точности
         )
 
@@ -256,7 +278,7 @@ class LLMClassifier:
     async def process_single_product(self, product: ProductItem, _dimensions: List[ClassificationDimension], is_request_doza: bool) -> dict:
         """Обрабатывает ОДИН товар через Ollama."""
         dimensions = list(_dimensions)
-        
+
         # Если есть дозировки в запросе - обработаем их отдельно
         only_doza = False
         if is_request_doza:
