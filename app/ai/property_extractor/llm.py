@@ -335,10 +335,13 @@ class LLMClassifier:
 
             except Exception as e:
                 logger.error(f"Error processing {product.code}: {e}")
+                classifications = {dim.id: [] if dim.is_multi_value else None for dim in dimensions}
+                if is_request_doza:
+                    classifications[DIM_DOS] = None
                 return {
                     "code": product.code, 
                     "reasoning": f"Ошибка обработки: {e}",
-                    "classifications": {dim.id: [] if dim.is_multi_value else None for dim in dimensions}
+                    "classifications": classifications
                 }
 
     async def process(self, request: ClassifyRequest):
